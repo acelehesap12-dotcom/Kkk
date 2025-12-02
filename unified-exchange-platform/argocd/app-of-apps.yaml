@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: unified-exchange-platform
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/acelehesap12-dotcom/Kkk.git'
+    targetRevision: HEAD
+    path: unified-exchange-platform/helm-charts/platform-root
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
+---
+# ApplicationSet for Microservices
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: exchange-services
+  namespace: argocd
+spec:
+  generators:
+  - list:
+      elements:
+      - name: matching-engine
+        path: unified-exchange-platform/helm-charts/matching-engine
+      - name: settlement-service
+        path: unified-exchange-platform/helm-charts/settlement-service
+      - name: risk-engine
+        path: unified-exchange-platform/helm-charts/risk-engine
+      - name: market-data-service
+        path: unified-exchange-platform/helm-charts/market-data
+  template:
+    metadata:
+      name: '{{name}}'
+    spec:
+      project: default
+      source:
+        repoURL: 'https://github.com/acelehesap12-dotcom/Kkk.git'
+        targetRevision: HEAD
+        path: '{{path}}'
+      destination:
+        server: 'https://kubernetes.default.svc'
+        namespace: exchange-services
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

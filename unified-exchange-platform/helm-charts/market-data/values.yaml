@@ -1,0 +1,7 @@
+image:
+  repository: ghcr.io/acelehesap12-dotcom/market-data-service
+  tag: latest
+
+env:
+  kafkaBrokers: "exchange-events-prod.confluent.svc.cluster.local:9092"
+  dbUrl: "postgres://admin_user:super_secure_password_placeholder@exchange-timescaledb.default.svc.cluster.local:5432/market_data"

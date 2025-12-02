@@ -1,0 +1,7 @@
+image:
+  repository: ghcr.io/acelehesap12-dotcom/frontend
+  tag: latest
+
+service:
+  type: LoadBalancer
+  port: 80

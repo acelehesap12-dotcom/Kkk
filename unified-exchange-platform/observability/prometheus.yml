@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'matching-engine'
+    static_configs:
+      - targets: ['matching-engine:9090'] # Assuming Rust exposes metrics
+
+  - job_name: 'order-gateway'
+    static_configs:
+      - targets: ['order-gateway:8080']
+
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9092'] # Needs JMX exporter in real prod

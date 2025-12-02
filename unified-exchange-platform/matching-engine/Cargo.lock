@@ -1,0 +1,1 @@
+# This file is intentionally empty to satisfy Docker COPY command if lock file doesn't exist yet

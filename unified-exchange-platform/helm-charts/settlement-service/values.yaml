@@ -1,0 +1,6 @@
+image:
+  repository: ghcr.io/acelehesap12-dotcom/settlement-service
+  tag: latest
+
+env:
+  vaultAddr: "http://vault.security.svc.cluster.local:8200"

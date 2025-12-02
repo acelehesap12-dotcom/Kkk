@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+  # 1. Matching Engine (Rust)
+  matching-engine:
+    build: 
+      context: ./matching-engine
+      dockerfile: Dockerfile # Assuming Dockerfile exists or will be created
+    image: matching-engine:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+    networks:
+      - exchange-net
+
+  # 2. Settlement Service (TypeScript)
+  settlement-service:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./settlement-service:/app
+    command: sh -c "npm install && npm start"
+    environment:
+      - VAULT_ADDR=http://vault:8200
+    networks:
+      - exchange-net
+
+  # 3. Risk Engine (Python)
+  risk-engine:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./risk-engine:/app
+    command: python src/liquidation_waterfall.py
+    networks:
+      - exchange-net
+
+  # 4. Quant Sandbox (Isolated)
+  quant-sandbox:
+    build: ./quant-studio
+    networks:
+      - none # STRICT NETWORK ISOLATION
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # 5. Order Gateway (Go)
+  order-gateway:
+    build: ./order-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:29092
+    networks:
+      - exchange-net
+
+  # 6. Market Data Service (Go)
+  market-data-service:
+    build: ./market-data-service
+    environment:
+      - KAFKA_BROKERS=kafka:29092
+      - DATABASE_URL=postgres://admin_user:super_secure_password_placeholder@timescaledb:5432/market_data
+    networks:
+      - exchange-net
+
+  # 8. User Service (Node.js)
+  user-service:
+    build: ./user-service
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://admin_user:super_secure_password_placeholder@management-db:5432/exchange_management
+      - JWT_SECRET=dev_secret_key
+    networks:
+      - exchange-net
+
+  # 9. Frontend (Next.js) - NEW
+  frontend:
+    build: ./frontend
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - exchange-net
+
+  # 7. Infrastructure Mocks (Local Dev Only)
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - exchange-net
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.0
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:29092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      - exchange-net
+
+  vault:
+    image: hashicorp/vault:1.13.3
+
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+    ports:
+      - "8200:8200"
+    networks:
+      - exchange-net
+
+  management-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: admin_user
+      POSTGRES_PASSWORD: super_secure_password_placeholder
+      POSTGRES_DB: exchange_management
+    ports:
+      - "5433:5432"
+    networks:
+      - exchange-net
+
+networks:
+  exchange-net:
+    driver: bridge

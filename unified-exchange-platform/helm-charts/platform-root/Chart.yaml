@@ -1,0 +1,31 @@
+apiVersion: v2
+name: platform-root
+description: Umbrella Chart for Unified Exchange Platform
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+dependencies:
+  - name: matching-engine
+    version: 0.1.0
+    repository: file://../matching-engine
+  - name: settlement-service
+    version: 0.1.0
+    repository: file://../settlement-service
+  - name: risk-engine
+    version: 0.1.0
+    repository: file://../risk-engine
+  - name: market-data
+    version: 0.1.0
+    repository: file://../market-data
+  - name: order-gateway
+    version: 0.1.0
+    repository: file://../order-gateway
+  - name: user-service
+    version: 0.1.0
+    repository: file://../user-service
+  - name: frontend
+    version: 0.1.0
+    repository: file://../frontend
+
+
+

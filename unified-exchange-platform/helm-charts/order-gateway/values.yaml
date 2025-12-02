@@ -1,0 +1,10 @@
+image:
+  repository: ghcr.io/acelehesap12-dotcom/order-gateway
+  tag: latest
+
+env:
+  kafkaBrokers: "exchange-events-prod.confluent.svc.cluster.local:9092"
+
+service:
+  type: LoadBalancer
+  port: 8080

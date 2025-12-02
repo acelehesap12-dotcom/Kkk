@@ -1,0 +1,7 @@
+image:
+  repository: ghcr.io/acelehesap12-dotcom/user-service
+  tag: latest
+
+env:
+  dbUrl: "postgres://admin_user:super_secure_password_placeholder@exchange-management-db.default.svc.cluster.local:5432/exchange_management"
+  jwtSecret: "super_secret_k99_key"

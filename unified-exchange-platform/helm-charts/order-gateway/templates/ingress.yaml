@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: order-gateway-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+      - api.exchange.com
+    secretName: exchange-tls-secret
+  rules:
+  - host: api.exchange.com
+    http:
+      paths:
+      - path: /ws/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: order-gateway
+            port:
+              number: 8080
