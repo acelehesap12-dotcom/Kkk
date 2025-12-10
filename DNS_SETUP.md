@@ -47,13 +47,13 @@ Bunu **Vercel Dashboard** üzerinden yapacağız (çünkü Nameserver'ları Verc
 3.  Vercel DNS Ayarlarına geri dönün (veya Namecheap'te "Advanced DNS" kullanıyorsanız oraya):
     *   **Type:** `CNAME`
     *   **Name:** `api`
-    *   **Value:** `[Render'ın verdiği adres]` (örn: `onrender.com` ile biten adres)
+    *   **Value:** `api.k99-exchange.xyz` (örn: `onrender.com` ile biten adres)
     *   **TTL:** `Auto` veya `3600`
 
 Aynı işlemi `gateway` için de yapın:
     *   **Type:** `CNAME`
     *   **Name:** `gateway`
-    *   **Value:** `[Render'ın verdiği adres]`
+    *   **Value:** `gateway.k99-exchange.xyz`
 
 ---
 

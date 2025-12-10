@@ -1,10 +1,12 @@
 {
-  "name": "exchange-frontend",
-  "version": "1.0.0",
+  "name": "k99-exchange-frontend",
+  "version": "2.0.0",
+  "description": "K99 Exchange - Multi-Asset Trading Platform",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
     "next": "13.4.19",
@@ -13,6 +15,13 @@
     "axios": "^1.5.0",
     "chart.js": "^4.4.0",
     "react-chartjs-2": "^5.2.0",
-    "socket.io-client": "^4.7.2"
+    "socket.io-client": "^4.7.2",
+    "lightweight-charts": "^4.1.0",
+    "swr": "^2.2.4",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "eslint": "^8.55.0",
+    "eslint-config-next": "13.4.19"
   }
 }
