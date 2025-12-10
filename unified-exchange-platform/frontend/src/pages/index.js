@@ -1,53 +1,77 @@
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Navbar from '../components/Navbar';
+import { ExchangeAPI } from '../lib/api';
+import { COLORS, SPACING } from '../styles/design-system';
 
 export default function Home() {
-  return (
-    <div style={{ minHeight: '100vh', background: '#000', color: '#fff', fontFamily: 'Arial' }}>
+  const [stats, setStats] = useState({
+    volume24h: 0,
+    activeTraders: 0,
+    totalMarkets: 0,
+    avgLatency: 0
+  });
+  const [topMovers, setTopMovers] = useState({ gainers: [], losers: [] });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStats();
+    const interval = setInterval(loadStats, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      const [marketsData, statsData] = await Promise.all([
+        ExchangeAPI.getMarkets(),
+        ExchangeAPI.getPlatformStats().catch(() => null)
+      ]);
+
+      // Calculate stats from markets
+      const totalVolume = marketsData.reduce((sum, m) => sum + (m.volume24h || 0), 0);
       
-      {/* NAVBAR */}
-      <nav style={{ 
-        position: 'fixed', 
-        top: 0, 
-        left: 0, 
-        right: 0, 
-        padding: '20px 40px', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        background: 'rgba(0,0,0,0.8)',
-        backdropFilter: 'blur(10px)',
-        zIndex: 100,
-        borderBottom: '1px solid #222'
-      }}>
-        <h2 style={{ margin: 0 }}>k99 <span style={{ color: '#666' }}>EXCHANGE</span></h2>
-        <div style={{ display: 'flex', gap: '30px' }}>
-          <Link href="/markets"><span style={{ color: '#888', cursor: 'pointer' }}>Markets</span></Link>
-          <Link href="/trade"><span style={{ color: '#888', cursor: 'pointer' }}>Trade</span></Link>
-          <Link href="/portfolio"><span style={{ color: '#888', cursor: 'pointer' }}>Portfolio</span></Link>
-          <Link href="/wallet"><span style={{ color: '#888', cursor: 'pointer' }}>Wallet</span></Link>
-          <Link href="/quant-studio"><span style={{ color: '#888', cursor: 'pointer' }}>Quant Studio</span></Link>
-          <Link href="/admin"><span style={{ color: '#888', cursor: 'pointer' }}>Admin</span></Link>
-        </div>
-        <div style={{ display: 'flex', gap: '15px' }}>
-          <button style={{ padding: '10px 20px', background: 'transparent', border: '1px solid #333', color: '#fff', borderRadius: '5px', cursor: 'pointer' }}>
-            Login
-          </button>
-          <button style={{ padding: '10px 20px', background: '#00ff88', color: '#000', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
-            Get Started
-          </button>
-        </div>
-      </nav>
+      // Sort for top movers
+      const sorted = [...marketsData].filter(m => m.change24h !== undefined);
+      sorted.sort((a, b) => b.change24h - a.change24h);
+      
+      setTopMovers({
+        gainers: sorted.slice(0, 5),
+        losers: sorted.slice(-5).reverse()
+      });
+
+      setStats({
+        volume24h: totalVolume,
+        activeTraders: statsData?.activeTraders || 125458,
+        totalMarkets: marketsData.length,
+        avgLatency: statsData?.avgLatency || 0.8
+      });
+    } catch (err) {
+      console.error('Failed to load stats:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatVolume = (vol) => {
+    if (vol >= 1e9) return `$${(vol / 1e9).toFixed(1)}B`;
+    if (vol >= 1e6) return `$${(vol / 1e6).toFixed(1)}M`;
+    return `$${vol.toLocaleString()}`;
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: COLORS.background, color: COLORS.text, fontFamily: 'Inter, -apple-system, sans-serif' }}>
+      <Navbar activePage="home" />
 
       {/* HERO SECTION */}
       <div style={{ 
-        height: '100vh', 
+        minHeight: '100vh', 
         display: 'flex', 
         flexDirection: 'column', 
         alignItems: 'center', 
         justifyContent: 'center', 
-        background: 'radial-gradient(circle at center, #1a1a1a 0%, #000 100%)',
+        background: `radial-gradient(ellipse at top, ${COLORS.backgroundLight} 0%, ${COLORS.background} 70%)`,
         textAlign: 'center',
-        padding: '20px',
+        padding: '100px 20px 80px',
         position: 'relative',
         overflow: 'hidden'
       }}>
@@ -55,67 +79,238 @@ export default function Home() {
         <div style={{ 
           position: 'absolute', 
           top: 0, left: 0, right: 0, bottom: 0,
-          backgroundImage: 'linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px)',
-          backgroundSize: '50px 50px',
-          animation: 'pulse 4s ease-in-out infinite'
+          backgroundImage: `linear-gradient(${COLORS.primary}08 1px, transparent 1px), linear-gradient(90deg, ${COLORS.primary}08 1px, transparent 1px)`,
+          backgroundSize: '60px 60px',
+          opacity: 0.5
+        }}></div>
+
+        {/* Floating Orbs */}
+        <div style={{
+          position: 'absolute',
+          width: '500px',
+          height: '500px',
+          background: `radial-gradient(circle, ${COLORS.primary}15 0%, transparent 70%)`,
+          top: '10%',
+          left: '10%',
+          borderRadius: '50%',
+          filter: 'blur(60px)'
+        }}></div>
+        <div style={{
+          position: 'absolute',
+          width: '400px',
+          height: '400px',
+          background: `radial-gradient(circle, ${COLORS.info}10 0%, transparent 70%)`,
+          bottom: '20%',
+          right: '15%',
+          borderRadius: '50%',
+          filter: 'blur(50px)'
         }}></div>
         
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ color: '#00ff88', fontSize: '1rem', marginBottom: '20px', letterSpacing: '3px' }}>
-            INSTITUTIONAL-GRADE TRADING
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: '900px' }}>
+          <div style={{ 
+            display: 'inline-block',
+            padding: '8px 16px',
+            background: `${COLORS.primary}15`,
+            border: `1px solid ${COLORS.primary}30`,
+            borderRadius: '20px',
+            color: COLORS.primary, 
+            fontSize: '0.85rem', 
+            marginBottom: '24px', 
+            letterSpacing: '2px',
+            fontWeight: '500'
+          }}>
+            ⚡ INSTITUTIONAL-GRADE TRADING
           </div>
-          <h1 style={{ fontSize: '5rem', marginBottom: '10px', background: 'linear-gradient(to right, #fff, #666)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          
+          <h1 style={{ 
+            fontSize: 'clamp(3rem, 8vw, 5.5rem)', 
+            marginBottom: '16px', 
+            fontWeight: '700',
+            background: `linear-gradient(135deg, ${COLORS.text} 0%, ${COLORS.textMuted} 100%)`, 
+            WebkitBackgroundClip: 'text', 
+            WebkitTextFillColor: 'transparent',
+            lineHeight: 1.1
+          }}>
             k99 EXCHANGE
           </h1>
-          <p style={{ fontSize: '1.5rem', color: '#888', maxWidth: '700px', marginBottom: '20px' }}>
-            The world's fastest <b style={{ color: '#00ff88' }}>Zero-Mock</b> multi-asset trading platform.
-          </p>
-          <p style={{ fontSize: '1rem', color: '#666', maxWidth: '600px', marginBottom: '40px' }}>
-            Crypto • Forex • Stocks • ETFs • Bonds • Commodities • Options • Futures
+          
+          <p style={{ 
+            fontSize: 'clamp(1.1rem, 2.5vw, 1.5rem)', 
+            color: COLORS.textSecondary, 
+            maxWidth: '700px', 
+            marginBottom: '16px',
+            margin: '0 auto 16px',
+            lineHeight: 1.5
+          }}>
+            The world's fastest <span style={{ color: COLORS.primary, fontWeight: '600' }}>multi-asset</span> trading platform with microsecond execution.
           </p>
           
-          <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
-            <Link href="/trade">
-              <button style={{ padding: '18px 50px', fontSize: '1.2rem', background: '#00ff88', color: '#000', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-                Start Trading Now
+          <div style={{ 
+            display: 'flex', 
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            gap: '12px',
+            marginBottom: '40px'
+          }}>
+            {['Crypto', 'Forex', 'Stocks', 'ETFs', 'Bonds', 'Commodities', 'Options', 'Futures'].map(asset => (
+              <span key={asset} style={{
+                padding: '6px 14px',
+                background: COLORS.backgroundLight,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: '16px',
+                fontSize: '0.85rem',
+                color: COLORS.textSecondary
+              }}>{asset}</span>
+            ))}
+          </div>
+          
+          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link href="/register">
+              <button style={{ 
+                padding: '16px 40px', 
+                fontSize: '1.1rem', 
+                background: COLORS.primary, 
+                color: COLORS.background, 
+                border: 'none', 
+                borderRadius: '8px', 
+                cursor: 'pointer', 
+                fontWeight: '600',
+                transition: 'all 0.2s ease',
+                boxShadow: `0 4px 20px ${COLORS.primary}40`
+              }}>
+                Start Trading Free →
               </button>
             </Link>
             <Link href="/markets">
-              <button style={{ padding: '18px 50px', fontSize: '1.2rem', background: 'transparent', border: '1px solid #333', color: '#fff', borderRadius: '8px', cursor: 'pointer' }}>
+              <button style={{ 
+                padding: '16px 40px', 
+                fontSize: '1.1rem', 
+                background: 'transparent', 
+                border: `1px solid ${COLORS.border}`, 
+                color: COLORS.text, 
+                borderRadius: '8px', 
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}>
                 View Markets
               </button>
             </Link>
           </div>
         </div>
 
-        {/* Stats Bar */}
+        {/* Live Stats Bar */}
         <div style={{ 
           position: 'absolute', 
-          bottom: '50px', 
+          bottom: '40px',
+          left: '50%',
+          transform: 'translateX(-50%)',
           display: 'flex', 
-          gap: '60px',
+          gap: '40px',
           padding: '20px 40px',
-          background: 'rgba(17,17,17,0.8)',
-          borderRadius: '15px',
-          border: '1px solid #222'
+          background: `${COLORS.backgroundLight}cc`,
+          backdropFilter: 'blur(10px)',
+          borderRadius: '16px',
+          border: `1px solid ${COLORS.border}`,
+          flexWrap: 'wrap',
+          justifyContent: 'center'
         }}>
-          <StatItem label="24h Volume" value="$28.5B" />
-          <StatItem label="Active Traders" value="125,458" />
-          <StatItem label="Markets" value="8 Classes" />
-          <StatItem label="Avg Latency" value="< 1ms" />
+          <StatItem 
+            label="24h Volume" 
+            value={loading ? '...' : formatVolume(stats.volume24h)} 
+            live 
+          />
+          <StatItem 
+            label="Active Traders" 
+            value={loading ? '...' : stats.activeTraders.toLocaleString()} 
+          />
+          <StatItem 
+            label="Markets" 
+            value={loading ? '...' : `${stats.totalMarkets}+`} 
+          />
+          <StatItem 
+            label="Avg Latency" 
+            value={loading ? '...' : `< ${stats.avgLatency}ms`} 
+          />
         </div>
       </div>
 
+      {/* TOP MOVERS SECTION */}
+      {!loading && (topMovers.gainers.length > 0 || topMovers.losers.length > 0) && (
+        <div style={{ padding: '60px 20px', background: COLORS.background }}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
+              {/* Top Gainers */}
+              <div style={{ 
+                padding: '24px',
+                background: COLORS.backgroundLight,
+                borderRadius: '12px',
+                border: `1px solid ${COLORS.border}`
+              }}>
+                <h3 style={{ margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: COLORS.success }}>▲</span> Top Gainers
+                </h3>
+                {topMovers.gainers.slice(0, 5).map((m, i) => (
+                  <div key={m.symbol} style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '12px 0',
+                    borderBottom: i < 4 ? `1px solid ${COLORS.border}` : 'none'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ color: COLORS.textMuted, width: '20px' }}>#{i + 1}</span>
+                      <span style={{ fontWeight: '500' }}>{m.symbol}</span>
+                    </div>
+                    <span style={{ color: COLORS.success, fontWeight: '600' }}>
+                      +{m.change24h?.toFixed(2)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Top Losers */}
+              <div style={{ 
+                padding: '24px',
+                background: COLORS.backgroundLight,
+                borderRadius: '12px',
+                border: `1px solid ${COLORS.border}`
+              }}>
+                <h3 style={{ margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: COLORS.danger }}>▼</span> Top Losers
+                </h3>
+                {topMovers.losers.slice(0, 5).map((m, i) => (
+                  <div key={m.symbol} style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '12px 0',
+                    borderBottom: i < 4 ? `1px solid ${COLORS.border}` : 'none'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ color: COLORS.textMuted, width: '20px' }}>#{i + 1}</span>
+                      <span style={{ fontWeight: '500' }}>{m.symbol}</span>
+                    </div>
+                    <span style={{ color: COLORS.danger, fontWeight: '600' }}>
+                      {m.change24h?.toFixed(2)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ASSET CLASSES SECTION */}
-      <div style={{ padding: '100px 20px', background: '#0a0a0a' }}>
+      <div style={{ padding: '80px 20px', background: COLORS.backgroundLight }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h2 style={{ textAlign: 'center', fontSize: '2.5rem', marginBottom: '20px' }}>Trade 8 Asset Classes</h2>
-          <p style={{ textAlign: 'center', color: '#888', marginBottom: '60px' }}>One platform. All markets. Institutional execution.</p>
+          <h2 style={{ textAlign: 'center', fontSize: '2.5rem', marginBottom: '12px' }}>Trade 8 Asset Classes</h2>
+          <p style={{ textAlign: 'center', color: COLORS.textSecondary, marginBottom: '48px' }}>One platform. All markets. Institutional execution.</p>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
             <AssetClassCard icon="₿" name="Crypto" pairs="500+" color="#f7931a" />
             <AssetClassCard icon="$" name="Forex" pairs="65+" color="#00aaff" />
-            <AssetClassCard icon="📈" name="Stocks" pairs="5000+" color="#00ff88" />
+            <AssetClassCard icon="📈" name="Stocks" pairs="5000+" color={COLORS.primary} />
             <AssetClassCard icon="📊" name="ETFs" pairs="1500+" color="#aa55ff" />
             <AssetClassCard icon="📄" name="Bonds" pairs="200+" color="#ff5588" />
             <AssetClassCard icon="🥇" name="Commodities" pairs="50+" color="#ffaa00" />
@@ -126,49 +321,49 @@ export default function Home() {
       </div>
 
       {/* FEATURES SECTION */}
-      <div style={{ padding: '100px 20px', maxWidth: '1200px', margin: '0 auto' }}>
-        <h2 style={{ textAlign: 'center', fontSize: '2.5rem', marginBottom: '60px' }}>Why k99?</h2>
+      <div style={{ padding: '80px 20px', maxWidth: '1200px', margin: '0 auto' }}>
+        <h2 style={{ textAlign: 'center', fontSize: '2.5rem', marginBottom: '48px' }}>Why k99?</h2>
         
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '40px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
           <FeatureCard 
             icon="⚡" 
             title="Microsecond Latency" 
-            desc="Built with Rust & Tokio. Our matching engine processes orders in under 100µs with kernel bypass optimizations." 
+            desc="Rust-based matching engine with kernel bypass. P50 latency under 100µs." 
           />
           <FeatureCard 
             icon="🛡️" 
-            title="Institutional Risk Engine" 
-            desc="Real-time Monte Carlo VaR, 3-stage liquidation waterfall, cross/isolated margin, and portfolio-level risk management." 
+            title="Institutional Risk" 
+            desc="Real-time VaR, 3-stage liquidation waterfall, cross/isolated margin." 
           />
           <FeatureCard 
             icon="🔗" 
             title="On-Chain Settlement" 
-            desc="Automated settlement with reorg handling, merkle-proof verification, and real-time proof-of-reserves." 
+            desc="Multi-chain support with reorg handling and proof-of-reserves." 
           />
           <FeatureCard 
             icon="🤖" 
-            title="AI Market Surveillance" 
-            desc="Real-time detection of spoofing, layering, wash trading, and front-running with regulator-grade reporting." 
+            title="AI Surveillance" 
+            desc="Real-time detection of spoofing, wash trading, and manipulation." 
           />
           <FeatureCard 
             icon="📊" 
             title="Quant Studio" 
-            desc="Build, backtest, and deploy your own trading strategies with our Python-based strategy builder." 
+            desc="Build and backtest strategies with Python. Deploy with one click." 
           />
           <FeatureCard 
             icon="🔐" 
             title="Enterprise Security" 
-            desc="HSM key management, Zero-Trust VPN, hardware 2FA, and SOC2/ISO27001 compliance ready." 
+            desc="HSM key management, hardware 2FA, SOC2/ISO27001 compliance." 
           />
         </div>
       </div>
 
       {/* SLO SECTION */}
-      <div style={{ padding: '100px 20px', background: '#0a0a0a' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h2 style={{ textAlign: 'center', fontSize: '2.5rem', marginBottom: '60px' }}>Performance Guarantees</h2>
+      <div style={{ padding: '80px 20px', background: COLORS.backgroundLight }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          <h2 style={{ textAlign: 'center', fontSize: '2.5rem', marginBottom: '48px' }}>Performance Guarantees</h2>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '30px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
             <SLOCard metric="Matching Latency P50" value="< 100µs" />
             <SLOCard metric="End-to-End P99" value="< 50ms" />
             <SLOCard metric="Market Data Delivery" value="< 10ms" />
@@ -179,25 +374,50 @@ export default function Home() {
 
       {/* CTA SECTION */}
       <div style={{ padding: '100px 20px', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '3rem', marginBottom: '20px' }}>Ready to Trade?</h2>
-        <p style={{ color: '#888', marginBottom: '40px', fontSize: '1.2rem' }}>Join 125,000+ traders on the fastest multi-asset exchange.</p>
-        <Link href="/trade">
-          <button style={{ padding: '20px 60px', fontSize: '1.3rem', background: '#00ff88', color: '#000', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-            Launch Trading Terminal
-          </button>
-        </Link>
+        <h2 style={{ fontSize: '3rem', marginBottom: '16px' }}>Ready to Trade?</h2>
+        <p style={{ color: COLORS.textSecondary, marginBottom: '32px', fontSize: '1.2rem' }}>Join 125,000+ traders on the fastest multi-asset exchange.</p>
+        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link href="/register">
+            <button style={{ 
+              padding: '18px 48px', 
+              fontSize: '1.1rem', 
+              background: COLORS.primary, 
+              color: COLORS.background, 
+              border: 'none', 
+              borderRadius: '8px', 
+              cursor: 'pointer', 
+              fontWeight: '600',
+              boxShadow: `0 4px 20px ${COLORS.primary}40`
+            }}>
+              Create Free Account
+            </button>
+          </Link>
+          <Link href="/trade">
+            <button style={{ 
+              padding: '18px 48px', 
+              fontSize: '1.1rem', 
+              background: 'transparent', 
+              border: `1px solid ${COLORS.border}`, 
+              color: COLORS.text, 
+              borderRadius: '8px', 
+              cursor: 'pointer'
+            }}>
+              Launch Terminal
+            </button>
+          </Link>
+        </div>
       </div>
 
       {/* FOOTER */}
-      <footer style={{ borderTop: '1px solid #222', padding: '60px 40px', background: '#0a0a0a' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '40px' }}>
+      <footer style={{ borderTop: `1px solid ${COLORS.border}`, padding: '60px 20px', background: COLORS.backgroundLight }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '40px' }}>
           <div>
-            <h3 style={{ marginBottom: '20px' }}>k99 Exchange</h3>
-            <p style={{ color: '#666', lineHeight: '1.8' }}>Institutional-grade multi-asset trading platform with microsecond execution.</p>
+            <h3 style={{ marginBottom: '16px' }}>k99 Exchange</h3>
+            <p style={{ color: COLORS.textMuted, lineHeight: '1.7', fontSize: '0.9rem' }}>Institutional-grade multi-asset trading platform.</p>
           </div>
           <div>
-            <h4 style={{ color: '#888', marginBottom: '15px' }}>Products</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', color: '#666' }}>
+            <h4 style={{ color: COLORS.textSecondary, marginBottom: '16px' }}>Products</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', color: COLORS.textMuted, fontSize: '0.9rem' }}>
               <Link href="/trade"><span style={{ cursor: 'pointer' }}>Spot Trading</span></Link>
               <Link href="/trade"><span style={{ cursor: 'pointer' }}>Margin Trading</span></Link>
               <Link href="/quant-studio"><span style={{ cursor: 'pointer' }}>Quant Studio</span></Link>
@@ -205,8 +425,8 @@ export default function Home() {
             </div>
           </div>
           <div>
-            <h4 style={{ color: '#888', marginBottom: '15px' }}>Resources</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', color: '#666' }}>
+            <h4 style={{ color: COLORS.textSecondary, marginBottom: '16px' }}>Resources</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', color: COLORS.textMuted, fontSize: '0.9rem' }}>
               <span>Documentation</span>
               <span>API Reference</span>
               <span>SDKs</span>
@@ -214,8 +434,8 @@ export default function Home() {
             </div>
           </div>
           <div>
-            <h4 style={{ color: '#888', marginBottom: '15px' }}>Legal</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', color: '#666' }}>
+            <h4 style={{ color: COLORS.textSecondary, marginBottom: '16px' }}>Legal</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', color: COLORS.textMuted, fontSize: '0.9rem' }}>
               <span>Terms of Service</span>
               <span>Privacy Policy</span>
               <span>Risk Disclosure</span>
@@ -223,19 +443,30 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <div style={{ textAlign: 'center', marginTop: '60px', paddingTop: '30px', borderTop: '1px solid #222', color: '#666' }}>
-          <p>&copy; 2025 k99 Unified Exchange Platform. All systems operational.</p>
+        <div style={{ textAlign: 'center', marginTop: '48px', paddingTop: '24px', borderTop: `1px solid ${COLORS.border}`, color: COLORS.textMuted }}>
+          <p>© 2025 k99 Unified Exchange Platform. All systems operational.</p>
         </div>
       </footer>
     </div>
   );
 }
 
-function StatItem({ label, value }) {
+function StatItem({ label, value, live }) {
   return (
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#00ff88' }}>{value}</div>
-      <div style={{ color: '#666', fontSize: '0.9rem' }}>{label}</div>
+    <div style={{ textAlign: 'center', minWidth: '100px' }}>
+      <div style={{ 
+        fontSize: '1.3rem', 
+        fontWeight: '600', 
+        color: COLORS.primary,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '6px'
+      }}>
+        {value}
+        {live && <span style={{ width: '6px', height: '6px', background: COLORS.success, borderRadius: '50%' }}></span>}
+      </div>
+      <div style={{ color: COLORS.textMuted, fontSize: '0.8rem', marginTop: '4px' }}>{label}</div>
     </div>
   );
 }
@@ -243,35 +474,35 @@ function StatItem({ label, value }) {
 function AssetClassCard({ icon, name, pairs, color }) {
   return (
     <div style={{ 
-      padding: '25px', 
-      background: '#111', 
-      borderRadius: '10px', 
-      border: '1px solid #222',
+      padding: '24px 16px', 
+      background: COLORS.background, 
+      borderRadius: '12px', 
+      border: `1px solid ${COLORS.border}`,
       textAlign: 'center',
-      transition: 'all 0.3s ease'
+      cursor: 'pointer'
     }}>
-      <div style={{ fontSize: '2.5rem', marginBottom: '15px' }}>{icon}</div>
-      <h3 style={{ marginBottom: '5px', color }}>{name}</h3>
-      <div style={{ color: '#666' }}>{pairs} pairs</div>
+      <div style={{ fontSize: '2rem', marginBottom: '12px' }}>{icon}</div>
+      <h3 style={{ marginBottom: '4px', color, fontWeight: '600', fontSize: '1rem' }}>{name}</h3>
+      <div style={{ color: COLORS.textMuted, fontSize: '0.85rem' }}>{pairs} pairs</div>
     </div>
   );
 }
 
 function FeatureCard({ icon, title, desc }) {
   return (
-    <div style={{ padding: '30px', background: '#111', borderRadius: '10px', border: '1px solid #222' }}>
-      <div style={{ fontSize: '3rem', marginBottom: '20px' }}>{icon}</div>
-      <h3 style={{ fontSize: '1.5rem', marginBottom: '10px', color: '#fff' }}>{title}</h3>
-      <p style={{ color: '#888', lineHeight: '1.6' }}>{desc}</p>
+    <div style={{ padding: '28px', background: COLORS.backgroundLight, borderRadius: '12px', border: `1px solid ${COLORS.border}` }}>
+      <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>{icon}</div>
+      <h3 style={{ fontSize: '1.2rem', marginBottom: '8px', color: COLORS.text, fontWeight: '600' }}>{title}</h3>
+      <p style={{ color: COLORS.textSecondary, lineHeight: '1.6', fontSize: '0.95rem', margin: 0 }}>{desc}</p>
     </div>
   );
 }
 
 function SLOCard({ metric, value }) {
   return (
-    <div style={{ padding: '30px', background: '#111', borderRadius: '10px', border: '1px solid #00ff8833', textAlign: 'center' }}>
-      <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#00ff88', marginBottom: '10px' }}>{value}</div>
-      <div style={{ color: '#888' }}>{metric}</div>
+    <div style={{ padding: '28px', background: COLORS.background, borderRadius: '12px', border: `1px solid ${COLORS.primary}20`, textAlign: 'center' }}>
+      <div style={{ fontSize: '2rem', fontWeight: '700', color: COLORS.primary, marginBottom: '8px' }}>{value}</div>
+      <div style={{ color: COLORS.textSecondary, fontSize: '0.9rem' }}>{metric}</div>
     </div>
   );
 }

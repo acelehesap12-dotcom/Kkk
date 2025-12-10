@@ -1,139 +1,315 @@
 // 👑 UNIFIED EXCHANGE - PORTFOLIO DASHBOARD
-import { useState, useEffect } from 'react';
+// Real-time portfolio tracking with live P&L
+
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { API_URL } from '../config';
-
-// Mock Portfolio Data (In production, fetch from API)
-const MOCK_POSITIONS = [
-  { symbol: "BTC-USD", type: "Crypto", side: "long", quantity: 2.5, avgPrice: 42500, currentPrice: 43200, pnl: 1750 },
-  { symbol: "ETH-USD", type: "Crypto", side: "long", quantity: 15, avgPrice: 2200, currentPrice: 2350, pnl: 2250 },
-  { symbol: "EUR-USD", type: "Forex", side: "short", quantity: 100000, avgPrice: 1.0850, currentPrice: 1.0820, pnl: 300 },
-  { symbol: "AAPL", type: "Stock", side: "long", quantity: 50, avgPrice: 175, currentPrice: 182, pnl: 350 },
-  { symbol: "GOLD", type: "Commodity", side: "long", quantity: 10, avgPrice: 1950, currentPrice: 2020, pnl: 700 },
-];
-
-const MOCK_BALANCES = {
-  k99: 125000.00,
-  USD: 50000.00,
-  BTC: 2.5,
-  ETH: 15.0,
-};
+import Navbar from '../components/Navbar';
+import { marketData } from '../lib/api';
 
 export default function Portfolio() {
-  const [positions, setPositions] = useState(MOCK_POSITIONS);
-  const [balances, setBalances] = useState(MOCK_BALANCES);
-  const [totalPnL, setTotalPnL] = useState(0);
-  const [marginUsed, setMarginUsed] = useState(0);
-  const [marginAvailable, setMarginAvailable] = useState(0);
+  const [positions, setPositions] = useState([]);
+  const [balances, setBalances] = useState({});
+  const [marketPrices, setMarketPrices] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState('All');
 
+  // Fetch market prices for P&L calculation
   useEffect(() => {
-    // Calculate totals
-    const pnl = positions.reduce((sum, p) => sum + p.pnl, 0);
-    setTotalPnL(pnl);
-    
-    // Mock margin calculation
-    const used = positions.reduce((sum, p) => sum + (p.quantity * p.currentPrice * 0.1), 0); // 10% margin
-    setMarginUsed(used);
-    setMarginAvailable(balances.k99 - used);
-  }, [positions, balances]);
-
-  return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', fontFamily: 'monospace' }}>
-      {/* Header */}
-      <div style={{ borderBottom: '1px solid #222', padding: '20px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Link href="/">
-          <h1 style={{ cursor: 'pointer', margin: 0 }}>k99 <span style={{ color: '#666' }}>EXCHANGE</span></h1>
-        </Link>
-        <div style={{ display: 'flex', gap: '20px' }}>
-          <Link href="/markets"><span style={{ color: '#888', cursor: 'pointer' }}>Markets</span></Link>
-          <Link href="/trade"><span style={{ color: '#888', cursor: 'pointer' }}>Trade</span></Link>
-          <Link href="/portfolio"><span style={{ color: '#00ff88', cursor: 'pointer' }}>Portfolio</span></Link>
-          <Link href="/wallet"><span style={{ color: '#888', cursor: 'pointer' }}>Wallet</span></Link>
-          <Link href="/quant-studio"><span style={{ color: '#888', cursor: 'pointer' }}>Quant Studio</span></Link>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div style={{ padding: '40px', maxWidth: '1400px', margin: '0 auto' }}>
+    const fetchData = async () => {
+      try {
+        const data = await marketData.getAllMarkets();
         
+        // Flatten all prices
+        const prices = {};
+        Object.entries(data.crypto).forEach(([k, v]) => prices[k] = v.price);
+        Object.entries(data.stocks).forEach(([k, v]) => prices[k] = v.price);
+        setMarketPrices(prices);
+
+        // Demo positions (in production, fetch from API)
+        setPositions([
+          { symbol: 'BTC-USD', type: 'Crypto', side: 'long', quantity: 2.5, avgPrice: 95000, leverage: 1 },
+          { symbol: 'ETH-USD', type: 'Crypto', side: 'long', quantity: 15, avgPrice: 3200, leverage: 1 },
+          { symbol: 'SOL-USD', type: 'Crypto', side: 'short', quantity: 50, avgPrice: 210, leverage: 3 },
+          { symbol: 'AAPL', type: 'Stock', side: 'long', quantity: 100, avgPrice: 240, leverage: 1 },
+          { symbol: 'NVDA', type: 'Stock', side: 'long', quantity: 50, avgPrice: 135, leverage: 1 },
+          { symbol: 'GOLD', type: 'Commodity', side: 'long', quantity: 5, avgPrice: 2650, leverage: 1 },
+        ]);
+
+        setBalances({
+          USD: 125000,
+          BTC: 2.5,
+          ETH: 15,
+          SOL: 50,
+        });
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Portfolio fetch error:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Calculate P&L for each position
+  const positionsWithPnL = useMemo(() => {
+    return positions.map(pos => {
+      const currentPrice = marketPrices[pos.symbol] || pos.avgPrice;
+      const notional = pos.quantity * pos.avgPrice;
+      const currentValue = pos.quantity * currentPrice;
+      
+      let pnl, pnlPercent;
+      if (pos.side === 'long') {
+        pnl = (currentPrice - pos.avgPrice) * pos.quantity * pos.leverage;
+        pnlPercent = ((currentPrice - pos.avgPrice) / pos.avgPrice) * 100 * pos.leverage;
+      } else {
+        pnl = (pos.avgPrice - currentPrice) * pos.quantity * pos.leverage;
+        pnlPercent = ((pos.avgPrice - currentPrice) / pos.avgPrice) * 100 * pos.leverage;
+      }
+
+      return {
+        ...pos,
+        currentPrice,
+        notional,
+        currentValue,
+        pnl,
+        pnlPercent,
+        margin: notional / pos.leverage,
+      };
+    });
+  }, [positions, marketPrices]);
+
+  // Filter positions
+  const filteredPositions = useMemo(() => {
+    if (activeFilter === 'All') return positionsWithPnL;
+    return positionsWithPnL.filter(p => p.type === activeFilter);
+  }, [positionsWithPnL, activeFilter]);
+
+  // Portfolio stats
+  const stats = useMemo(() => {
+    const totalPnL = positionsWithPnL.reduce((sum, p) => sum + p.pnl, 0);
+    const totalNotional = positionsWithPnL.reduce((sum, p) => sum + p.notional, 0);
+    const totalMargin = positionsWithPnL.reduce((sum, p) => sum + p.margin, 0);
+    const winningPositions = positionsWithPnL.filter(p => p.pnl > 0).length;
+    
+    return {
+      equity: balances.USD + totalPnL,
+      unrealizedPnL: totalPnL,
+      marginUsed: totalMargin,
+      marginAvailable: balances.USD - totalMargin,
+      marginLevel: totalMargin > 0 ? (balances.USD / totalMargin) * 100 : 0,
+      winRate: positionsWithPnL.length > 0 ? (winningPositions / positionsWithPnL.length) * 100 : 0,
+    };
+  }, [positionsWithPnL, balances]);
+
+  // Asset allocation
+  const allocation = useMemo(() => {
+    const byType = {};
+    positionsWithPnL.forEach(p => {
+      byType[p.type] = (byType[p.type] || 0) + p.currentValue;
+    });
+    const total = Object.values(byType).reduce((a, b) => a + b, 0);
+    return Object.entries(byType).map(([type, value]) => ({
+      type,
+      value,
+      percentage: total > 0 ? (value / total) * 100 : 0,
+    }));
+  }, [positionsWithPnL]);
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '32px', marginBottom: '16px' }}>⏳</div>
+          <div style={{ color: '#888' }}>Loading portfolio...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+      <Navbar />
+
+      <div style={{ padding: '40px', maxWidth: '1600px', margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '32px', marginBottom: '8px' }}>Portfolio</h1>
+          <p style={{ color: '#888' }}>Track your positions and performance in real-time</p>
+        </div>
+
         {/* Summary Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '40px' }}>
-          <SummaryCard title="Total Equity" value={`$${(balances.k99 + totalPnL).toLocaleString()}`} color="#fff" />
-          <SummaryCard title="Unrealized P&L" value={`${totalPnL >= 0 ? '+' : ''}$${totalPnL.toLocaleString()}`} color={totalPnL >= 0 ? '#00ff88' : '#ff0055'} />
-          <SummaryCard title="Margin Used" value={`$${marginUsed.toLocaleString()}`} color="#ffaa00" />
-          <SummaryCard title="Available Margin" value={`$${marginAvailable.toLocaleString()}`} color="#00aaff" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' }}>
+          <SummaryCard 
+            label="Total Equity" 
+            value={`$${stats.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            subValue={`${stats.unrealizedPnL >= 0 ? '+' : ''}$${stats.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })} today`}
+            subColor={stats.unrealizedPnL >= 0 ? '#00ff88' : '#ff0055'}
+          />
+          <SummaryCard 
+            label="Unrealized P&L" 
+            value={`${stats.unrealizedPnL >= 0 ? '+' : ''}$${stats.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            valueColor={stats.unrealizedPnL >= 0 ? '#00ff88' : '#ff0055'}
+          />
+          <SummaryCard 
+            label="Margin Used" 
+            value={`$${stats.marginUsed.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            subValue={`${stats.marginLevel.toFixed(1)}% margin level`}
+          />
+          <SummaryCard 
+            label="Available" 
+            value={`$${stats.marginAvailable.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            subValue={`Win Rate: ${stats.winRate.toFixed(0)}%`}
+          />
         </div>
 
-        {/* Positions Table */}
-        <div style={{ background: '#111', borderRadius: '10px', border: '1px solid #222', overflow: 'hidden' }}>
-          <div style={{ padding: '20px', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0 }}>Open Positions</h2>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button style={{ padding: '8px 16px', background: '#222', border: 'none', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>All</button>
-              <button style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #333', color: '#888', borderRadius: '4px', cursor: 'pointer' }}>Crypto</button>
-              <button style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #333', color: '#888', borderRadius: '4px', cursor: 'pointer' }}>Forex</button>
-              <button style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #333', color: '#888', borderRadius: '4px', cursor: 'pointer' }}>Stocks</button>
+        {/* Positions Section */}
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+          {/* Positions Table */}
+          <div style={{ background: '#111', borderRadius: '12px', border: '1px solid #222', overflow: 'hidden' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0, fontSize: '18px' }}>Open Positions ({filteredPositions.length})</h2>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {['All', 'Crypto', 'Stock', 'Commodity'].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setActiveFilter(f)}
+                    style={{
+                      padding: '6px 14px',
+                      background: activeFilter === f ? '#222' : 'transparent',
+                      border: '1px solid #333',
+                      color: activeFilter === f ? '#fff' : '#666',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                    }}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#0a0a0a', color: '#666' }}>
-                <th style={{ padding: '15px', textAlign: 'left' }}>Symbol</th>
-                <th style={{ padding: '15px', textAlign: 'left' }}>Type</th>
-                <th style={{ padding: '15px', textAlign: 'left' }}>Side</th>
-                <th style={{ padding: '15px', textAlign: 'right' }}>Quantity</th>
-                <th style={{ padding: '15px', textAlign: 'right' }}>Avg Price</th>
-                <th style={{ padding: '15px', textAlign: 'right' }}>Current Price</th>
-                <th style={{ padding: '15px', textAlign: 'right' }}>P&L</th>
-                <th style={{ padding: '15px', textAlign: 'center' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {positions.map((pos, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #1a1a1a' }}>
-                  <td style={{ padding: '15px', fontWeight: 'bold' }}>{pos.symbol}</td>
-                  <td style={{ padding: '15px' }}>
-                    <span style={{ padding: '4px 8px', background: '#222', borderRadius: '4px', fontSize: '0.8rem' }}>{pos.type}</span>
-                  </td>
-                  <td style={{ padding: '15px' }}>
-                    <span style={{ color: pos.side === 'long' ? '#00ff88' : '#ff0055' }}>{pos.side.toUpperCase()}</span>
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'right' }}>{pos.quantity}</td>
-                  <td style={{ padding: '15px', textAlign: 'right' }}>${pos.avgPrice.toLocaleString()}</td>
-                  <td style={{ padding: '15px', textAlign: 'right' }}>${pos.currentPrice.toLocaleString()}</td>
-                  <td style={{ padding: '15px', textAlign: 'right', color: pos.pnl >= 0 ? '#00ff88' : '#ff0055', fontWeight: 'bold' }}>
-                    {pos.pnl >= 0 ? '+' : ''}${pos.pnl.toLocaleString()}
-                  </td>
-                  <td style={{ padding: '15px', textAlign: 'center' }}>
-                    <button style={{ padding: '6px 12px', background: '#ff0055', border: 'none', color: '#fff', borderRadius: '4px', cursor: 'pointer', marginRight: '5px' }}>Close</button>
-                    <button style={{ padding: '6px 12px', background: '#333', border: 'none', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>Edit</button>
-                  </td>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#0a0a0a', color: '#666', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '14px 16px', textAlign: 'left' }}>Symbol</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'left' }}>Side</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'right' }}>Size</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'right' }}>Entry</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'right' }}>Mark</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'right' }}>P&L</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center' }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Risk Metrics */}
-        <div style={{ marginTop: '40px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          <div style={{ background: '#111', borderRadius: '10px', border: '1px solid #222', padding: '20px' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '20px' }}>Risk Metrics</h3>
-            <div style={{ display: 'grid', gap: '15px' }}>
-              <RiskMetric label="Portfolio VaR (99%, 1-day)" value="$2,450" status="normal" />
-              <RiskMetric label="Expected Shortfall" value="$3,120" status="normal" />
-              <RiskMetric label="Margin Level" value="245%" status="healthy" />
-              <RiskMetric label="Liquidation Price (BTC)" value="$28,500" status="warning" />
-            </div>
+              </thead>
+              <tbody>
+                {filteredPositions.map((pos, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #1a1a1a' }}>
+                    <td style={{ padding: '16px' }}>
+                      <div style={{ fontWeight: 'bold' }}>{pos.symbol}</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>{pos.type}</div>
+                    </td>
+                    <td style={{ padding: '16px' }}>
+                      <span style={{
+                        padding: '4px 10px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        background: pos.side === 'long' ? '#00ff8820' : '#ff005520',
+                        color: pos.side === 'long' ? '#00ff88' : '#ff0055',
+                      }}>
+                        {pos.side.toUpperCase()} {pos.leverage > 1 && `${pos.leverage}x`}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'right', fontFamily: 'monospace' }}>{pos.quantity}</td>
+                    <td style={{ padding: '16px', textAlign: 'right', fontFamily: 'monospace' }}>${pos.avgPrice.toLocaleString()}</td>
+                    <td style={{ padding: '16px', textAlign: 'right', fontFamily: 'monospace' }}>${pos.currentPrice.toLocaleString()}</td>
+                    <td style={{ padding: '16px', textAlign: 'right' }}>
+                      <div style={{ color: pos.pnl >= 0 ? '#00ff88' : '#ff0055', fontWeight: 'bold', fontFamily: 'monospace' }}>
+                        {pos.pnl >= 0 ? '+' : ''}${pos.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </div>
+                      <div style={{ fontSize: '12px', color: pos.pnl >= 0 ? '#00ff88' : '#ff0055' }}>
+                        ({pos.pnlPercent >= 0 ? '+' : ''}{pos.pnlPercent.toFixed(2)}%)
+                      </div>
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                      <button style={{
+                        padding: '6px 14px',
+                        background: '#ff0055',
+                        border: 'none',
+                        color: '#fff',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        marginRight: '8px',
+                      }}>
+                        Close
+                      </button>
+                      <Link href={`/trade?symbol=${pos.symbol}`}>
+                        <button style={{
+                          padding: '6px 14px',
+                          background: '#222',
+                          border: '1px solid #333',
+                          color: '#fff',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                        }}>
+                          Trade
+                        </button>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          
-          <div style={{ background: '#111', borderRadius: '10px', border: '1px solid #222', padding: '20px' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '20px' }}>Asset Allocation</h3>
-            <div style={{ display: 'grid', gap: '10px' }}>
-              <AllocationBar asset="Crypto" percentage={65} color="#f7931a" />
-              <AllocationBar asset="Forex" percentage={15} color="#00aaff" />
-              <AllocationBar asset="Stocks" percentage={12} color="#00ff88" />
-              <AllocationBar asset="Commodities" percentage={8} color="#ffaa00" />
+
+          {/* Right Sidebar */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Asset Allocation */}
+            <div style={{ background: '#111', borderRadius: '12px', border: '1px solid #222', padding: '20px' }}>
+              <h3 style={{ margin: '0 0 20px 0', fontSize: '16px' }}>Asset Allocation</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {allocation.map((a, i) => (
+                  <AllocationBar key={i} asset={a.type} percentage={a.percentage} color={getTypeColor(a.type)} />
+                ))}
+              </div>
+            </div>
+
+            {/* Risk Metrics */}
+            <div style={{ background: '#111', borderRadius: '12px', border: '1px solid #222', padding: '20px' }}>
+              <h3 style={{ margin: '0 0 20px 0', fontSize: '16px' }}>Risk Metrics</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <RiskMetric label="Portfolio VaR (99%, 1-day)" value="$4,250" status="normal" />
+                <RiskMetric label="Expected Shortfall" value="$6,120" status="normal" />
+                <RiskMetric label="Margin Level" value={`${stats.marginLevel.toFixed(1)}%`} status={stats.marginLevel > 150 ? 'healthy' : 'warning'} />
+                <RiskMetric label="Max Drawdown" value="-8.5%" status="normal" />
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div style={{ background: '#111', borderRadius: '12px', border: '1px solid #222', padding: '20px' }}>
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>Quick Actions</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <Link href="/trade" style={{ textDecoration: 'none' }}>
+                  <button style={{ width: '100%', padding: '12px', background: '#00ff88', border: 'none', color: '#000', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                    New Position
+                  </button>
+                </Link>
+                <button style={{ width: '100%', padding: '12px', background: '#222', border: '1px solid #333', color: '#fff', borderRadius: '8px', cursor: 'pointer' }}>
+                  Close All Positions
+                </button>
+                <Link href="/wallet" style={{ textDecoration: 'none' }}>
+                  <button style={{ width: '100%', padding: '12px', background: '#222', border: '1px solid #333', color: '#fff', borderRadius: '8px', cursor: 'pointer' }}>
+                    Deposit Funds
+                  </button>
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -142,21 +318,14 @@ export default function Portfolio() {
   );
 }
 
-function SummaryCard({ title, value, color }) {
-  return (
-    <div style={{ background: '#111', borderRadius: '10px', border: '1px solid #222', padding: '20px' }}>
-      <div style={{ color: '#666', marginBottom: '10px', fontSize: '0.9rem' }}>{title}</div>
-      <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color }}>{value}</div>
-    </div>
-  );
-}
+// ===================== COMPONENTS =====================
 
-function RiskMetric({ label, value, status }) {
-  const colors = { healthy: '#00ff88', normal: '#fff', warning: '#ffaa00', danger: '#ff0055' };
+function SummaryCard({ label, value, subValue, valueColor, subColor }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ color: '#888' }}>{label}</span>
-      <span style={{ color: colors[status], fontWeight: 'bold' }}>{value}</span>
+    <div style={{ background: '#111', borderRadius: '12px', border: '1px solid #222', padding: '20px' }}>
+      <div style={{ color: '#666', fontSize: '13px', marginBottom: '8px' }}>{label}</div>
+      <div style={{ fontSize: '24px', fontWeight: 'bold', color: valueColor || '#fff', marginBottom: '4px' }}>{value}</div>
+      {subValue && <div style={{ fontSize: '13px', color: subColor || '#666' }}>{subValue}</div>}
     </div>
   );
 }
@@ -164,13 +333,28 @@ function RiskMetric({ label, value, status }) {
 function AllocationBar({ asset, percentage, color }) {
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
         <span style={{ color: '#888' }}>{asset}</span>
-        <span style={{ color: '#fff' }}>{percentage}%</span>
+        <span style={{ color, fontWeight: '600' }}>{percentage.toFixed(1)}%</span>
       </div>
-      <div style={{ height: '8px', background: '#222', borderRadius: '4px', overflow: 'hidden' }}>
-        <div style={{ width: `${percentage}%`, height: '100%', background: color, borderRadius: '4px' }}></div>
+      <div style={{ height: '6px', background: '#222', borderRadius: '3px', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${percentage}%`, background: color, borderRadius: '3px' }} />
       </div>
     </div>
   );
+}
+
+function RiskMetric({ label, value, status }) {
+  const statusColors = { healthy: '#00ff88', normal: '#00aaff', warning: '#ffaa00', critical: '#ff0055' };
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span style={{ color: '#888', fontSize: '13px' }}>{label}</span>
+      <span style={{ color: statusColors[status], fontWeight: '600', fontFamily: 'monospace' }}>{value}</span>
+    </div>
+  );
+}
+
+function getTypeColor(type) {
+  const colors = { Crypto: '#f7931a', Forex: '#00aaff', Stock: '#00ff88', Commodity: '#ffaa00', Bond: '#ff5588' };
+  return colors[type] || '#888';
 }
