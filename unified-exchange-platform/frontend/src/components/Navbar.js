@@ -33,7 +33,11 @@ export default function Navbar() {
       </div>
       <div>
         <Link href="/" style={linkStyle('/')}>Home</Link>
+        <Link href="/markets" style={linkStyle('/markets')}>Markets</Link>
         <Link href="/trade" style={linkStyle('/trade')}>Trade</Link>
+        <Link href="/portfolio" style={linkStyle('/portfolio')}>Portfolio</Link>
+        <Link href="/wallet" style={linkStyle('/wallet')}>Wallet</Link>
+        <Link href="/quant-studio" style={linkStyle('/quant-studio')}>Quant Studio</Link>
         <Link href="/admin" style={linkStyle('/admin')}>Admin</Link>
       </div>
     </nav>
