@@ -91,20 +91,50 @@ def run_user_algo(user_code):
         print(f"Runtime Error: {e}")
         sys.exit(1)
 
-if __name__ == "__main__":
-    # Example User Code (Injected via API in production)
-    sample_algo = """
-import numpy as np
+# ============================================
+# HTTP SERVER - Render.com Health Check
+# ============================================
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+import os
 
-def strategy():
-    prices = np.random.normal(100, 5, 1000)
-    ma_50 = np.mean(prices[-50:])
-    print(f"Calculated Moving Average: {ma_50}")
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/health':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = json.dumps({
+                "status": "healthy",
+                "service": "quant-studio",
+                "version": "1.0.0",
+                "max_cpu_seconds": MAX_CPU_TIME_SECONDS,
+                "max_memory_mb": MAX_MEMORY_MB
+            })
+            self.wfile.write(response.encode())
+        elif self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = json.dumps({
+                "service": "K99 Exchange - Quant Studio",
+                "version": "1.0.0",
+                "endpoints": ["/health", "/run", "/validate"]
+            })
+            self.wfile.write(response.encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
     
-    # Attempting illegal operation (will fail validation)
-    # import os
-    # os.system('ls -la')
+    def log_message(self, format, *args):
+        pass
 
-strategy()
-"""
-    run_user_algo(sample_algo)
+def start_server():
+    port = int(os.getenv("PORT", 8083))
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    print(f"🌐 Quant Studio HTTP Server started on port {port}")
+    server.serve_forever()
+
+if __name__ == "__main__":
+    # Start HTTP server for health checks
+    start_server()

@@ -4,8 +4,8 @@
   "description": "K99 Exchange - User Management, Auth, K99 Token & Cold Wallet Service",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "start": "NODE_PATH=../ node src/index.js",
+    "dev": "NODE_PATH=../ nodemon src/index.js",
     "test": "jest"
   },
   "dependencies": {

@@ -11,9 +11,9 @@ services:
     env: node
     region: frankfurt
     plan: free
-    rootDir: unified-exchange-platform/user-service
-    buildCommand: npm install
-    startCommand: npm start
+    rootDir: unified-exchange-platform
+    buildCommand: cd user-service && npm install
+    startCommand: cd user-service && npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -22,9 +22,9 @@ services:
         value: 3001
       - key: DATABASE_URL
         sync: false
-      - key: REDIS_URL
+      - key: UPSTASH_REDIS_URL
         sync: false
-      - key: REDIS_TOKEN
+      - key: UPSTASH_REDIS_TOKEN
         sync: false
       - key: JWT_SECRET
         generateValue: true

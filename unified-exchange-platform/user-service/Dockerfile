@@ -3,10 +3,18 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Copy package files
 COPY package.json ./
-RUN npm install
 
+# Install dependencies
+RUN npm install --production
+
+# Copy source files
 COPY src ./src
 
-EXPOSE 3000
+# Environment
+ENV NODE_ENV=production
+ENV PORT=3001
+
+EXPOSE 3001
 CMD ["npm", "start"]

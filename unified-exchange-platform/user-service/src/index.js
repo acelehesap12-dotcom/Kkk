@@ -7,9 +7,13 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const crypto = require('crypto');
-const { db, cache, initializeDatabase } = require('../../shared/database');
-const { k99Service, K99_CONFIG } = require('../../shared/k99-token');
-const coldWalletService = require('../../shared/cold-wallet');
+const path = require('path');
+
+// Shared modules - resolve path dynamically
+const sharedDir = path.resolve(__dirname, '../../shared');
+const { db, cache, initializeDatabase } = require(path.join(sharedDir, 'database'));
+const { k99Service, K99_CONFIG } = require(path.join(sharedDir, 'k99-token'));
+const coldWalletService = require(path.join(sharedDir, 'cold-wallet'));
 
 const app = express();
 app.use(express.json());
@@ -84,6 +88,40 @@ const rateLimit = (limit, windowSeconds) => {
     next();
   };
 };
+
+// ============================================
+// HEALTH CHECK - Render.com için gerekli
+// ============================================
+
+app.get('/health', async (req, res) => {
+  try {
+    // Database bağlantısını test et
+    await db.query('SELECT 1');
+    
+    res.json({
+      status: 'healthy',
+      service: 'user-service',
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+      database: 'connected',
+      uptime: process.uptime()
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      service: 'user-service',
+      error: error.message
+    });
+  }
+});
+
+app.get('/', (req, res) => {
+  res.json({
+    service: 'K99 Exchange - User Service',
+    version: '1.0.0',
+    endpoints: ['/health', '/auth/register', '/auth/login', '/profile', '/admin']
+  });
+});
 
 // ============================================
 // AUTH ROUTES

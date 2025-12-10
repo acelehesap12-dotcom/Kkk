@@ -198,12 +198,62 @@ if __name__ == "__main__":
         logger.info(f"Insurance Fund absorbing position value: {position_value}")
         self.insurance_fund_balance -= (position_value * 0.1) # Loss assumption
 
+# ============================================
+# HTTP SERVER - Render.com Health Check
+# ============================================
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+
+class HealthHandler(BaseHTTPRequestHandler):
+    risk_engine = None
+    
+    def do_GET(self):
+        if self.path == '/health':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = json.dumps({
+                "status": "healthy",
+                "service": "risk-engine",
+                "version": "1.0.0",
+                "panic_mode": HealthHandler.risk_engine.panic_mode if HealthHandler.risk_engine else False,
+                "insurance_fund": HealthHandler.risk_engine.insurance_fund_balance if HealthHandler.risk_engine else 0
+            })
+            self.wfile.write(response.encode())
+        elif self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = json.dumps({
+                "service": "K99 Exchange - Risk Engine",
+                "version": "1.0.0",
+                "endpoints": ["/health", "/panic", "/var"]
+            })
+            self.wfile.write(response.encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def log_message(self, format, *args):
+        pass  # Suppress logs
+
+def start_http_server(risk_engine, port=8082):
+    HealthHandler.risk_engine = risk_engine
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    logger.info(f"🌐 HTTP Server started on port {port}")
+    server.serve_forever()
+
 # Usage
 if __name__ == "__main__":
     print("👑 RISK ENGINE STARTED")
     print(">>> Monitoring Margin Levels & VaR...")
     
     risk_engine = RiskEngine()
+    
+    # Start HTTP server in background thread
+    port = int(os.getenv("PORT", 8082))
+    http_thread = threading.Thread(target=start_http_server, args=(risk_engine, port), daemon=True)
+    http_thread.start()
     
     # Simulate Event Loop
     while True:
@@ -226,4 +276,3 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("Stopping Risk Engine...")
             break
-
