@@ -91,12 +91,23 @@ async fn main() {
                             info!("Received Order for {}: {:?}", symbol, order_req);
                             
                             // Convert JSON to Internal Order Struct (Simplified)
+                            let price = (order_req["price"].as_f64().unwrap_or(0.0) * 100.0) as u64;
+                            let quantity = (order_req["quantity"].as_f64().unwrap_or(0.0) * 100.0) as u64;
+                            
+                            let order_type = match order_req["order_type"].as_str().unwrap_or("limit") {
+                                "market" => OrderType::Market,
+                                "stop" => OrderType::Stop((order_req["stop_price"].as_f64().unwrap_or(0.0) * 100.0) as u64),
+                                "iceberg" => OrderType::Iceberg((order_req["visible_quantity"].as_f64().unwrap_or(0.0) * 100.0) as u64),
+                                _ => OrderType::Limit,
+                            };
+
                             let order = Order {
                                 id: order_req["id"].as_str().unwrap_or("0").parse::<u64>().unwrap_or(0),
-                                price: (order_req["price"].as_f64().unwrap_or(0.0) * 100.0) as u64, // Float to Int
-                                quantity: (order_req["quantity"].as_f64().unwrap_or(0.0) * 100.0) as u64,
+                                price,
+                                quantity,
+                                remaining_qty: quantity,
                                 side: if order_req["side"] == "buy" { Side::Buy } else { Side::Sell },
-                                order_type: OrderType::Limit,
+                                order_type,
                                 timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
                             };
 

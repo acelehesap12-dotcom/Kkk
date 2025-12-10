@@ -41,6 +41,11 @@ const ASSETS = [
 export default function Trade() {
   const [symbol, setSymbol] = useState("BTC-USD");
   const [price, setPrice] = useState(50000);
+  const [quantity, setQuantity] = useState(1.0);
+  const [orderType, setOrderType] = useState("limit");
+  const [stopPrice, setStopPrice] = useState("");
+  const [visibleQty, setVisibleQty] = useState("");
+  
   const [ws, setWs] = useState(null);
   const [logs, setLogs] = useState([]);
   const [trades, setTrades] = useState([]);
@@ -138,16 +143,20 @@ export default function Trade() {
 
   const sendOrder = (side) => {
     if (!ws) return;
+    
     const order = {
       user_id: user ? user.id : "guest",
       symbol: symbol,
       side: side,
       price: parseFloat(price),
-      quantity: 1.0,
-      order_type: "limit"
+      quantity: parseFloat(quantity),
+      order_type: orderType,
+      stop_price: stopPrice ? parseFloat(stopPrice) : null,
+      visible_quantity: visibleQty ? parseFloat(visibleQty) : null
     };
+    
     ws.send(JSON.stringify(order));
-    addLog(`Sent ${side.toUpperCase()} Order for ${symbol} @ ${price}`);
+    addLog(`Sent ${side.toUpperCase()} ${orderType.toUpperCase()} Order for ${symbol}`);
   };
 
   return (
@@ -215,25 +224,78 @@ export default function Trade() {
       {/* Order Entry */}
       <div style={{ flex: 1, padding: '20px', backgroundColor: '#1a1a1a' }}>
         <h3>Place Order</h3>
+        
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', color: '#888' }}>Order Type</label>
+          <select 
+            value={orderType} 
+            onChange={(e) => setOrderType(e.target.value)}
+            style={{ width: '100%', padding: '10px', background: '#333', border: 'none', color: 'white', borderRadius: '4px' }}
+          >
+            <option value="limit">Limit</option>
+            <option value="market">Market</option>
+            <option value="stop">Stop Loss</option>
+            <option value="iceberg">Iceberg</option>
+          </select>
+        </div>
+
         <div style={{ marginBottom: '10px' }}>
-          <label>Price (USD)</label>
+          <label style={{ display: 'block', marginBottom: '5px', color: '#888' }}>Price (USD)</label>
           <input 
             type="number" 
             value={price} 
             onChange={e => setPrice(e.target.value)}
-            style={{ width: '100%', padding: '10px', background: '#333', border: 'none', color: 'white' }}
+            disabled={orderType === 'market'}
+            style={{ width: '100%', padding: '10px', background: '#333', border: 'none', color: 'white', borderRadius: '4px', opacity: orderType === 'market' ? 0.5 : 1 }}
           />
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+
+        <div style={{ marginBottom: '10px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', color: '#888' }}>Quantity</label>
+          <input 
+            type="number" 
+            value={quantity} 
+            onChange={e => setQuantity(e.target.value)}
+            style={{ width: '100%', padding: '10px', background: '#333', border: 'none', color: 'white', borderRadius: '4px' }}
+          />
+        </div>
+
+        {orderType === 'stop' && (
+          <div style={{ marginBottom: '10px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', color: '#ff5555' }}>Trigger Price</label>
+            <input 
+              type="number" 
+              value={stopPrice} 
+              onChange={e => setStopPrice(e.target.value)}
+              placeholder="Trigger Price"
+              style={{ width: '100%', padding: '10px', background: '#333', border: '1px solid #ff5555', color: 'white', borderRadius: '4px' }}
+            />
+          </div>
+        )}
+
+        {orderType === 'iceberg' && (
+          <div style={{ marginBottom: '10px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', color: '#55aaff' }}>Visible Qty</label>
+            <input 
+              type="number" 
+              value={visibleQty} 
+              onChange={e => setVisibleQty(e.target.value)}
+              placeholder="Visible Amount"
+              style={{ width: '100%', padding: '10px', background: '#333', border: '1px solid #55aaff', color: 'white', borderRadius: '4px' }}
+            />
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
           <button 
             onClick={() => sendOrder('buy')}
-            style={{ flex: 1, padding: '15px', background: '#00ff88', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+            style={{ flex: 1, padding: '15px', background: '#00ff88', border: 'none', cursor: 'pointer', fontWeight: 'bold', borderRadius: '4px' }}
           >
             BUY / LONG
           </button>
           <button 
             onClick={() => sendOrder('sell')}
-            style={{ flex: 1, padding: '15px', background: '#ff0055', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: 'white' }}
+            style={{ flex: 1, padding: '15px', background: '#ff0055', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: 'white', borderRadius: '4px' }}
           >
             SELL / SHORT
           </button>

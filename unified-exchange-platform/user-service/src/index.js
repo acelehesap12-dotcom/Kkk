@@ -18,8 +18,25 @@ const pool = new Pool({
 
 const SECRET_KEY = process.env.JWT_SECRET || "super_secret_k99_key";
 const ADMIN_EMAIL = "berkecansuskun1998@gmail.com";
+const ALLOWED_ADMIN_IPS = ["127.0.0.1", "::1", "10.0.0.5"]; // Example Whitelist
 
 // --- MIDDLEWARE ---
+
+const checkIpWhitelist = (req, res, next) => {
+    // Only enforce for Admin
+    if (req.user && req.user.email === ADMIN_EMAIL) {
+        const clientIp = req.ip || req.connection.remoteAddress;
+        // In production, use a proper IP library to handle subnets/proxies
+        // For now, we just log and allow for demo purposes, or block if strict
+        console.log(`[SECURITY] Admin Access Attempt from IP: ${clientIp}`);
+        
+        // Uncomment to enforce:
+        // if (!ALLOWED_ADMIN_IPS.includes(clientIp)) {
+        //    return res.status(403).json({ error: "Access Denied: IP not whitelisted for Admin" });
+        // }
+    }
+    next();
+};
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
