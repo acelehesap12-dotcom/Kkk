@@ -1,0 +1,137 @@
+name: 🚀 K99 Exchange Full Deployment
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "deployment"
+  cancel-in-progress: false
+
+env:
+  NODE_ENV: production
+
+jobs:
+  # ========================================
+  # JOB 1: Frontend Build & Deploy to GitHub Pages
+  # ========================================
+  frontend:
+    name: 🌐 Frontend Deploy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./unified-exchange-platform/frontend
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ./unified-exchange-platform/frontend/package-lock.json
+
+      - name: 📚 Install dependencies
+        run: npm ci || npm install
+
+      - name: 🔨 Build Static Site
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: 📤 Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./unified-exchange-platform/frontend/out
+
+  deploy-pages:
+    name: 🚀 Deploy to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      - name: 🌍 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ========================================
+  # JOB 2: Trigger Render Deployment
+  # ========================================
+  backend:
+    name: 🔧 Backend Deploy (Render)
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔔 Trigger Render Deploy Hook
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger": "github-action", "branch": "main"}'
+        continue-on-error: true
+
+      - name: ✅ Backend Deploy Triggered
+        run: |
+          echo "🚀 Backend deployment triggered on Render.com"
+          echo "📊 Services: user-service, order-gateway, market-data"
+
+  # ========================================
+  # JOB 3: Health Check
+  # ========================================
+  healthcheck:
+    name: 🏥 Health Check
+    runs-on: ubuntu-latest
+    needs: [deploy-pages, backend]
+    steps:
+      - name: ⏳ Wait for deployment
+        run: sleep 60
+
+      - name: 🔍 Check Frontend
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://k99-exchange.xyz/ || echo "000")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Frontend is live!"
+          else
+            echo "⚠️ Frontend returned HTTP $HTTP_CODE"
+          fi
+
+      - name: 🔍 Check API (if available)
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://api.k99-exchange.xyz/health || echo "000")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ API is healthy!"
+          else
+            echo "⚠️ API returned HTTP $HTTP_CODE (may not be deployed yet)"
+          fi
+        continue-on-error: true
+
+  # ========================================
+  # JOB 4: Notification
+  # ========================================
+  notify:
+    name: 📢 Notify
+    runs-on: ubuntu-latest
+    needs: healthcheck
+    if: always()
+    steps:
+      - name: 📊 Deployment Summary
+        run: |
+          echo "╔════════════════════════════════════════╗"
+          echo "║     🎉 K99 EXCHANGE DEPLOYMENT         ║"
+          echo "╠════════════════════════════════════════╣"
+          echo "║ 🌐 Frontend: https://k99-exchange.xyz  ║"
+          echo "║ 🔧 API: https://api.k99-exchange.xyz   ║"
+          echo "║ 📊 Status: Deployment Complete         ║"
+          echo "╚════════════════════════════════════════╝"

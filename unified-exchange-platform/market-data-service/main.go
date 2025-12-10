@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -24,6 +25,9 @@ type Trade struct {
 
 func main() {
 	log.Println("👑 MARKET DATA SERVICE STARTED")
+
+	// Start HTTP Server for health checks
+	go startHTTPServer()
 
 	// 1. Connect to TimescaleDB
 	dbUrl := os.Getenv("DATABASE_URL")
@@ -114,4 +118,24 @@ func mockLoop() {
 		time.Sleep(5 * time.Second)
 		log.Println(">>> [MOCK] Aggregating OHLCV Candles...")
 	}
+}
+
+// 🏥 HTTP Server for Health Checks
+func startHTTPServer() {
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "healthy",
+			"service": "market-data-service",
+			"version": "2.0.0",
+		})
+	})
+
+	port := os.Getenv("HTTP_PORT")
+	if port == "" {
+		port = "8081"
+	}
+	log.Printf("🏥 Health check server listening on :%s", port)
+	http.ListenAndServe(":"+port, nil)
 }

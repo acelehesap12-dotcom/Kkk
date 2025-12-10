@@ -1,0 +1,131 @@
+# 🚀 K99 EXCHANGE - RENDER BLUEPRINT
+# Otomatik deployment için Infrastructure as Code
+# Bu dosya Render.com'da "Blueprint" olarak kullanılır
+
+services:
+  # ========================================
+  # USER SERVICE - Kullanıcı Yönetimi
+  # ========================================
+  - type: web
+    name: k99-user-service
+    env: node
+    region: frankfurt
+    plan: free
+    rootDir: unified-exchange-platform/user-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: REDIS_TOKEN
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+
+  # ========================================
+  # ORDER GATEWAY - Emir Kapısı (Go)
+  # ========================================
+  - type: web
+    name: k99-order-gateway
+    env: docker
+    region: frankfurt
+    plan: free
+    rootDir: unified-exchange-platform/order-gateway
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+  # ========================================
+  # MARKET DATA SERVICE - Piyasa Verileri (Go)
+  # ========================================
+  - type: web
+    name: k99-market-data
+    env: docker
+    region: frankfurt
+    plan: free
+    rootDir: unified-exchange-platform/market-data-service
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8081
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+  # ========================================
+  # RISK ENGINE - Risk Yönetimi (Python)
+  # ========================================
+  - type: web
+    name: k99-risk-engine
+    env: docker
+    region: frankfurt
+    plan: free
+    rootDir: unified-exchange-platform/risk-engine
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8082
+      - key: DATABASE_URL
+        sync: false
+
+  # ========================================
+  # QUANT STUDIO - Algoritma Sandbox (Python)
+  # ========================================
+  - type: web
+    name: k99-quant-studio
+    env: docker
+    region: frankfurt
+    plan: free
+    rootDir: unified-exchange-platform/quant-studio
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8083
+
+  # ========================================
+  # SETTLEMENT SERVICE - Uzlaşma (Node.js)
+  # ========================================
+  - type: web
+    name: k99-settlement
+    env: node
+    region: frankfurt
+    plan: free
+    rootDir: unified-exchange-platform/settlement-service
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3002
+      - key: DATABASE_URL
+        sync: false
+
+# ========================================
+# CRON JOBS - Zamanlanmış Görevler
+# ========================================
+# - type: cron
+#   name: k99-market-sync
+#   env: node
+#   schedule: "*/5 * * * *"  # Her 5 dakikada bir
+#   rootDir: unified-exchange-platform
+#   buildCommand: npm install
+#   startCommand: node scripts/sync-markets.js

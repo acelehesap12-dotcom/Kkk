@@ -24,7 +24,7 @@ var (
 	}
 	isTradingHalted bool
 	haltMutex       sync.RWMutex
-	
+
 	// Client Management
 	clients    = make(map[*websocket.Conn]bool)
 	clientsMux sync.Mutex
@@ -67,6 +67,18 @@ func main() {
 		handleConnection(w, r, p)
 	})
 
+	// 🏥 HEALTH CHECK ENDPOINT
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":         "healthy",
+			"service":        "order-gateway",
+			"version":        "2.0.0",
+			"trading_halted": isTradingHalted,
+		})
+	})
+
 	// 🚨 PANIC SWITCH ENDPOINT
 	http.HandleFunc("/admin/panic", func(w http.ResponseWriter, r *http.Request) {
 		// CORS
@@ -102,7 +114,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request, p *kafka.Producer)
 		log.Println("Upgrade error:", err)
 		return
 	}
-	
+
 	// Register Client
 	clientsMux.Lock()
 	clients[ws] = true
