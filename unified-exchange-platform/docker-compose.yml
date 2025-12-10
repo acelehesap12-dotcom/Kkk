@@ -24,6 +24,8 @@ services:
     command: sh -c "npm install && npm start"
     environment:
       - VAULT_ADDR=http://vault:8200
+      - KAFKA_BROKERS=kafka:29092
+      - DATABASE_URL=postgres://admin_user:super_secure_password_placeholder@management-db:5432/exchange_management
     networks:
       - exchange-net
 
@@ -126,6 +128,17 @@ services:
       VAULT_DEV_ROOT_TOKEN_ID: root
     ports:
       - "8200:8200"
+    networks:
+      - exchange-net
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    environment:
+      POSTGRES_USER: admin_user
+      POSTGRES_PASSWORD: super_secure_password_placeholder
+      POSTGRES_DB: market_data
+    ports:
+      - "5432:5432"
     networks:
       - exchange-net
 

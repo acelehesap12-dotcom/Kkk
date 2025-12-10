@@ -56,13 +56,39 @@ func main() {
 		msg, err := c.ReadMessage(-1)
 		if err == nil {
 			var trade Trade
-			json.Unmarshal(msg.Value, &trade)
+			if err := json.Unmarshal(msg.Value, &trade); err != nil {
+				log.Printf("Error parsing trade: %v", err)
+				continue
+			}
+
 			log.Printf("Processing Trade: %s %f", trade.Symbol, trade.Price)
-			// In real impl: Aggregate to 1m, 5m, 1h candles here
-			// saveTrade(pool, trade)
+
+			// Save to TimescaleDB
+			if pool != nil {
+				saveTrade(pool, trade)
+			}
 		} else {
-			log.Printf("Consumer error: %v (%v)\n", err, msg)
+			log.Printf("Consumer error: %v\n", err)
 		}
+	}
+}
+
+func saveTrade(pool *pgxpool.Pool, trade Trade) {
+	// Convert Unix timestamp to Time
+	ts := time.Unix(0, trade.Timestamp) // Assuming nanoseconds from Matching Engine
+	if trade.Timestamp < 10000000000 {  // If seconds
+		ts = time.Unix(trade.Timestamp, 0)
+	}
+
+	query := `
+		INSERT INTO trades (time, symbol, price, quantity)
+		VALUES ($1, $2, $3, $4)
+	`
+	_, err := pool.Exec(context.Background(), query, ts, trade.Symbol, trade.Price, trade.Quantity)
+	if err != nil {
+		log.Printf("Failed to insert trade: %v", err)
+	} else {
+		log.Printf("✅ Trade Saved to DB: %s", trade.Symbol)
 	}
 }
 

@@ -1,6 +1,7 @@
 // 👑 UNIFIED EXCHANGE - ADMIN DASHBOARD
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_URL, GATEWAY_URL } from '../config';
 
 export default function AdminPanel() {
   const [users, setUsers] = useState([]);
@@ -12,7 +13,7 @@ export default function AdminPanel() {
   useEffect(() => {
     const login = async () => {
       try {
-        const res = await axios.post('http://localhost:3000/auth/login', {
+        const res = await axios.post(`${API_URL}/auth/login`, {
           email: 'berkecansuskun1998@gmail.com',
           password: 'initial_password_placeholder' // In real usage, user inputs this
         });
@@ -26,7 +27,7 @@ export default function AdminPanel() {
   }, []);
 
   const fetchUsers = async (authToken) => {
-    const res = await axios.get('http://localhost:3000/admin/users', {
+    const res = await axios.get(`${API_URL}/admin/users`, {
       headers: { Authorization: `Bearer ${authToken}` }
     });
     setUsers(res.data);
@@ -34,7 +35,7 @@ export default function AdminPanel() {
 
   const handleMint = async () => {
     if (!selectedUser) return;
-    await axios.post('http://localhost:3000/admin/mint', 
+    await axios.post(`${API_URL}/admin/mint`, 
       { userId: selectedUser, amount: mintAmount },
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -43,11 +44,22 @@ export default function AdminPanel() {
   };
 
   const toggleFreeze = async (userId, currentStatus) => {
-    await axios.post(`http://localhost:3000/admin/users/${userId}/freeze`,
+    await axios.post(`${API_URL}/admin/users/${userId}/freeze`,
       { freeze: !currentStatus },
       { headers: { Authorization: `Bearer ${token}` } }
     );
     fetchUsers(token);
+  };
+
+  const handlePanic = async () => {
+    if (!confirm("ARE YOU SURE YOU WANT TO HALT THE EXCHANGE?")) return;
+    try {
+      const res = await axios.post(`${GATEWAY_URL}/admin/panic`);
+      alert(`🚨 PANIC SWITCH ACTIVATED! New State: ${res.data.halted ? 'HALTED' : 'ACTIVE'}`);
+    } catch (e) {
+      console.error("Panic switch failed", e);
+      alert("Failed to toggle panic switch");
+    }
   };
 
   return (
@@ -70,7 +82,7 @@ export default function AdminPanel() {
 
         <div style={{ border: '1px solid #333', padding: '20px', borderRadius: '8px', flex: 1, borderColor: 'red' }}>
           <h2>🚨 Risk Control</h2>
-          <button style={{ padding: '15px', background: 'red', color: 'white', border: 'none', width: '100%', fontSize: '18px', cursor: 'pointer' }}>
+          <button onClick={handlePanic} style={{ padding: '15px', background: 'red', color: 'white', border: 'none', width: '100%', fontSize: '18px', cursor: 'pointer' }}>
             PANIC SWITCH (HALT EXCHANGE)
           </button>
         </div>

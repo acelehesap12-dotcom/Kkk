@@ -6,11 +6,15 @@
 import time
 import random
 import logging
+import os
+import json
+# from kafka import KafkaConsumer # Uncomment in production
 
 # Configuration
 SUPER_ADMIN_EMAIL = "berkecansuskun1998@gmail.com"
 VAR_CONFIDENCE_LEVEL = 0.99
 VAR_TIME_HORIZON_HOURS = 1
+KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "kafka:29092")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("RiskEngine")
@@ -19,6 +23,22 @@ class RiskEngine:
     def __init__(self):
         self.panic_mode = False
         self.insurance_fund_balance = 10_000_000.0 # USD
+        logger.info("👑 RISK ENGINE STARTED")
+        # self.consumer = KafkaConsumer('trades.executed', bootstrap_servers=KAFKA_BROKERS)
+
+    def run(self):
+        logger.info(">>> Monitoring Market Risk (Monte Carlo Simulation Running...)")
+        while True:
+            # Mock Risk Loop
+            time.sleep(5)
+            # In real implementation:
+            # for msg in self.consumer:
+            #    process_trade(msg)
+            
+            # Simulate VaR Check
+            current_volatility = 0.05 # 5% daily vol
+            var = self.calculate_var_monte_carlo(100000, current_volatility)
+            logger.info(f"Risk Check: Portfolio VaR (99%) = ${var:.2f} | System Status: {'PANIC' if self.panic_mode else 'HEALTHY'}")
 
     def check_panic_switch(self, user_email: str):
         """
@@ -48,6 +68,12 @@ class RiskEngine:
         
         simulated_returns.sort()
         percentile_index = int((1 - VAR_CONFIDENCE_LEVEL) * iterations)
+        var = portfolio_value * abs(simulated_returns[percentile_index])
+        return var
+
+if __name__ == "__main__":
+    engine = RiskEngine()
+    engine.run()
         var_loss = simulated_returns[percentile_index] * portfolio_value
         
         return abs(var_loss)

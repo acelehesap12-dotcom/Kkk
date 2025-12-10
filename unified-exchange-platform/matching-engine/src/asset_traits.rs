@@ -71,7 +71,45 @@ impl AssetBehavior for StockAsset {
     fn is_market_open(&self, _t: u64) -> bool { true } // Placeholder for exchange hours
 }
 
-// ... (Similar structs for Bond, ETF, Commodity, Option, Future would follow)
+pub struct BondAsset;
+impl AssetBehavior for BondAsset {
+    fn get_type(&self) -> AssetType { AssetType::Bond }
+    fn validate_order(&self, _p: u64, _q: u64) -> bool { true }
+    fn get_pip_precision(&self) -> u32 { 4 }
+    fn is_market_open(&self, _t: u64) -> bool { true }
+}
+
+pub struct ETFAsset;
+impl AssetBehavior for ETFAsset {
+    fn get_type(&self) -> AssetType { AssetType::ETF }
+    fn validate_order(&self, _p: u64, _q: u64) -> bool { true }
+    fn get_pip_precision(&self) -> u32 { 2 }
+    fn is_market_open(&self, _t: u64) -> bool { true }
+}
+
+pub struct CommodityAsset;
+impl AssetBehavior for CommodityAsset {
+    fn get_type(&self) -> AssetType { AssetType::Commodity }
+    fn validate_order(&self, _p: u64, _q: u64) -> bool { true }
+    fn get_pip_precision(&self) -> u32 { 3 }
+    fn is_market_open(&self, _t: u64) -> bool { true }
+}
+
+pub struct OptionAsset;
+impl AssetBehavior for OptionAsset {
+    fn get_type(&self) -> AssetType { AssetType::Option }
+    fn validate_order(&self, _p: u64, _q: u64) -> bool { true }
+    fn get_pip_precision(&self) -> u32 { 2 }
+    fn is_market_open(&self, _t: u64) -> bool { true }
+}
+
+pub struct FutureAsset;
+impl AssetBehavior for FutureAsset {
+    fn get_type(&self) -> AssetType { AssetType::Future }
+    fn validate_order(&self, _p: u64, _q: u64) -> bool { true }
+    fn get_pip_precision(&self) -> u32 { 2 }
+    fn is_market_open(&self, _t: u64) -> bool { true }
+}
 
 // --- 3. Order Matching Engine (Zero-Allocation) ---
 

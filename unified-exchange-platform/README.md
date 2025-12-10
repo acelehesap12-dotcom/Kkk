@@ -41,8 +41,20 @@ unified-exchange-platform/
 ### 🏗️ Mimari Bileşenler
 
 1.  **Matching Engine (Rust):** `io_uring` ve Zero-Allocation prensipleriyle tasarlanmıştır. 8 varlık sınıfını destekler.
-2.  **Settlement (Node.js):** Blockchain reorg durumlarını izler ve ledger rollback işlemlerini yönetir.
-3.  **Risk Engine (Python):** 3 aşamalı likidasyon şelalesi (İptal -> TWAP -> Sigorta Fonu).
+2.  **Order Gateway (Go):** Yüksek eşzamanlılık (High Concurrency) için WebSocket gateway. Kafka Producer.
+3.  **Market Data Service (Go):** Gerçek zamanlı veri işleme ve TimescaleDB kaydı.
+4.  **Settlement (Node.js):** Blockchain reorg durumlarını izler ve ledger rollback işlemlerini yönetir.
+5.  **Risk Engine (Python):** 3 aşamalı likidasyon şelalesi (İptal -> TWAP -> Sigorta Fonu) ve Panic Switch.
+6.  **Frontend (Next.js):** Modern, responsive ve gerçek zamanlı trading arayüzü.
+
+### 🔄 Veri Akışı (Zero-Mock)
+
+1.  **Kullanıcı** Frontend üzerinden emir girer.
+2.  **Order Gateway** emri alır ve Kafka `orders.ingest` konusuna yazar.
+3.  **Matching Engine** emri eşleştirir ve Kafka `trades.executed` konusuna yazar.
+4.  **Market Data Service** işlemi veritabanına kaydeder.
+5.  **Settlement Service** bakiyeleri günceller.
+6.  **Gateway** işlemi WebSocket ile Frontend'e geri bildirir (Canlı Grafik Güncellenir).
 
 ---
 *CTO & Senior Principal Architect*

@@ -1,103 +1,99 @@
 // 👑 UNIFIED EXCHANGE PLATFORM - SETTLEMENT SERVICE
 // Language: TypeScript
-// Component: Chain Reorganization Manager
-// Purpose: Handle Blockchain Reorgs & Ledger Rollbacks
+// Purpose: Consumes Executed Trades & Updates User Balances (k99)
 
-import { EventEmitter } from 'events';
+import { Kafka } from 'kafkajs';
+import { Pool } from 'pg';
 
-interface Block {
-    hash: string;
-    height: number;
-    transactions: Transaction[];
+// Configuration
+const KAFKA_BROKERS = (process.env.KAFKA_BROKERS || 'kafka:29092').split(',');
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://admin_user:super_secure_password_placeholder@localhost:5432/exchange_management';
+
+// Initialize Clients
+const kafka = new Kafka({ clientId: 'settlement-service', brokers: KAFKA_BROKERS });
+const consumer = kafka.consumer({ groupId: 'settlement-group' });
+const pool = new Pool({ connectionString: DATABASE_URL });
+
+interface Trade {
+    symbol: string;
+    price: number;
+    quantity: number;
+    timestamp: number;
+    buyer_id?: string; // In a real engine, trade event includes buyer/seller IDs
+    seller_id?: string;
 }
 
-interface Transaction {
-    txId: string;
-    from: string;
-    to: string;
-    amount: bigint;
-    userId?: string; // Internal User ID if deposit
-}
-
-class LedgerService {
-    async lockUserBalance(userId: string, reason: string): Promise<void> {
-        console.log(`[LEDGER] Locking balance for User ${userId}: ${reason}`);
-        // DB Update: UPDATE users SET status = 'LOCKED' WHERE id = ...
-    }
-
-    async rollbackTransaction(txId: string): Promise<void> {
-        console.log(`[LEDGER] Rolling back transaction ${txId}`);
-        // DB Update: Revert balance change, mark tx as 'REORG_INVALIDATED'
-    }
-}
-
-export class ChainReorgManager extends EventEmitter {
-    private finalizedHeight: number = 0;
-    private knownBlocks: Map<number, string> = new Map(); // Height -> Hash
-    private ledger: LedgerService;
-
-    constructor(ledger: LedgerService) {
-        super();
-        this.ledger = ledger;
-    }
-
-    public async onNewBlock(block: Block) {
-        const existingHash = this.knownBlocks.get(block.height);
-
-        if (existingHash && existingHash !== block.hash) {
-            // 🚨 REORG DETECTED 🚨
-            console.error(`[CRITICAL] Reorg Detected at Height ${block.height}! Old: ${existingHash}, New: ${block.hash}`);
-            await this.handleReorg(block.height, block);
-        } else {
-            this.knownBlocks.set(block.height, block.hash);
-            this.finalizedHeight = block.height - 6; // Assume 6 block finality (e.g., BTC)
-        }
-    }
-
-    private async handleReorg(forkHeight: number, newBlock: Block) {
-        // 1. Identify Affected Transactions
-        // In a real system, we would query the DB for all deposits confirmed > forkHeight
-        
-        // 2. Emergency Lock
-        // Lock accounts that deposited funds in the orphaned chain to prevent double-spend withdrawal
-        const affectedUsers = await this.identifyAffectedUsers(forkHeight);
-        for (const userId of affectedUsers) {
-            await this.ledger.lockUserBalance(userId, `Reorg detected at height ${forkHeight}`);
-        }
-
-        // 3. Ledger Rollback
-        // Revert the credited balances from the orphaned blocks
-        await this.performRollback(forkHeight);
-
-        // 4. Re-process New Chain
-        // Process transactions in the new block (newBlock)
-    }
-
-    private async identifyAffectedUsers(forkHeight: number): Promise<string[]> {
-        // Mock implementation
-        return ['user_123', 'user_456'];
-    }
-
-    private async performRollback(forkHeight: number) {
-        console.log(`[REORG] Rolling back ledger to height ${forkHeight - 1}`);
-        // Execute DB transaction to revert states
-    }
-}
-
-// Usage Example
-if (require.main === module) {
+async function start() {
     console.log("👑 SETTLEMENT SERVICE STARTED");
-    console.log(">>> Listening for Blockchain Events...");
+    
+    // 1. Connect to DB
+    try {
+        await pool.connect();
+        console.log(">>> Connected to Management DB");
+    } catch (e) {
+        console.error("Failed to connect to DB", e);
+        return;
+    }
 
-    const ledger = new LedgerService();
-    const reorgManager = new ChainReorgManager(ledger);
+    // 2. Connect to Kafka
+    await consumer.connect();
+    await consumer.subscribe({ topic: 'trades.executed', fromBeginning: false });
+    console.log(">>> Subscribed to 'trades.executed'");
 
-    // Simulate Block Stream Loop
-    let height = 1000;
-    setInterval(() => {
-        height++;
-        const mockBlock: Block = {
-            hash: `0x${Math.random().toString(16).substr(2, 64)}`,
+    // 3. Process Trades
+    await consumer.run({
+        eachMessage: async ({ topic, partition, message }) => {
+            if (!message.value) return;
+            
+            try {
+                const tradeData = JSON.parse(message.value.toString());
+                console.log(`[SETTLEMENT] Processing Trade: ${tradeData.symbol} @ ${tradeData.price}`);
+                
+                // MOCK LOGIC: Since our Matching Engine is simple and doesn't emit Buyer/Seller IDs yet,
+                // we will simulate a settlement for a demo user.
+                // In production: tradeData would have buyer_id and seller_id.
+                
+                await settleTrade(tradeData);
+
+            } catch (e) {
+                console.error("Error processing trade:", e);
+            }
+        },
+    });
+}
+
+async function settleTrade(trade: any) {
+    const totalValue = trade.price * trade.quantity;
+    
+    // Transaction: Buyer pays k99, Seller gets k99
+    // For this demo, we'll just deduct fee from a "System" account or log it.
+    // Let's assume we update the "admin" user's balance as a fee collector for visibility.
+    
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Example: 1% Fee collected by Exchange
+        const fee = totalValue * 0.01;
+        
+        // Update Admin Balance (Fee Collection)
+        await client.query(
+            'UPDATE users SET k99_balance = k99_balance + $1 WHERE role = $2',
+            [fee, 'admin']
+        );
+
+        await client.query('COMMIT');
+        console.log(`✅ Trade Settled. Fee Collected: ${fee} k99`);
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error("Settlement Failed:", e);
+    } finally {
+        client.release();
+    }
+}
+
+start().catch(console.error);
+
             height: height,
             transactions: []
         };
