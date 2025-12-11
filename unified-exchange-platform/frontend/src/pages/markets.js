@@ -4,14 +4,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import Navbar from '../components/Navbar';
-import { marketData } from '../lib/api';
+import { ExchangeAPI } from '../lib/api';
 
-const ASSET_TYPES = ['All', 'Crypto', 'Forex', 'Stock', 'Commodity', 'Bond'];
+const ASSET_TYPES = ['All', 'crypto', 'forex', 'stocks', 'commodities', 'bonds', 'etfs', 'futures', 'options'];
 
 export default function Markets() {
   const [filter, setFilter] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState('volume');
+  const [sortBy, setSortBy] = useState('volume24h');
   const [sortDir, setSortDir] = useState('desc');
   const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,95 +21,24 @@ export default function Markets() {
   useEffect(() => {
     const fetchMarkets = async () => {
       try {
-        const data = await marketData.getAllMarkets();
-        
-        // Transform data into unified format
-        const allMarkets = [];
-        
-        // Crypto
-        Object.entries(data.crypto).forEach(([symbol, info]) => {
-          allMarkets.push({
-            symbol,
-            name: getAssetName(symbol),
-            type: 'Crypto',
-            price: info.price,
-            change: info.change,
-            volume: info.volume,
-            high: info.price * 1.02,
-            low: info.price * 0.98,
-          });
-        });
-        
-        // Forex
-        Object.entries(data.forex).forEach(([symbol, info]) => {
-          allMarkets.push({
-            symbol,
-            name: getAssetName(symbol),
-            type: 'Forex',
-            price: info.price,
-            change: info.change,
-            volume: 2100000000000,
-            high: info.price * 1.001,
-            low: info.price * 0.999,
-          });
-        });
-        
-        // Stocks
-        Object.entries(data.stocks).forEach(([symbol, info]) => {
-          allMarkets.push({
-            symbol,
-            name: info.name,
-            type: 'Stock',
-            price: info.price,
-            change: info.change,
-            volume: info.volume,
-            high: info.price * 1.015,
-            low: info.price * 0.985,
-          });
-        });
-        
-        // Commodities
-        Object.entries(data.commodities).forEach(([symbol, info]) => {
-          allMarkets.push({
-            symbol,
-            name: info.name,
-            type: 'Commodity',
-            price: info.price,
-            change: info.change,
-            volume: info.volume,
-            high: info.price * 1.01,
-            low: info.price * 0.99,
-          });
-        });
-        
-        // Bonds
-        Object.entries(data.bonds).forEach(([symbol, info]) => {
-          allMarkets.push({
-            symbol,
-            name: info.name,
-            type: 'Bond',
-            price: info.price,
-            change: info.change,
-            volume: 2500000000,
-            yield: info.yield,
-          });
-        });
+        // Use the new ExchangeAPI that fetches real data from CoinGecko
+        const allMarkets = await ExchangeAPI.getMarkets();
         
         setMarkets(allMarkets);
         setLastUpdate(new Date());
         setLoading(false);
       } catch (error) {
-        console.error('Market fetch error:', error);
+        console.error('Markets fetch error:', error);
         setLoading(false);
       }
     };
 
     fetchMarkets();
-    const interval = setInterval(fetchMarkets, 15000);
+    const interval = setInterval(fetchMarkets, 15000); // Refresh every 15s
     return () => clearInterval(interval);
   }, []);
 
-  // Filter and sort markets
+  // Filter and sort
   const filteredMarkets = useMemo(() => {
     let result = [...markets];
     
@@ -120,16 +49,15 @@ export default function Markets() {
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(m => 
-        m.symbol.toLowerCase().includes(term) ||
-        m.name.toLowerCase().includes(term)
+        m.symbol.toLowerCase().includes(term) || 
+        m.name?.toLowerCase().includes(term)
       );
     }
     
     result.sort((a, b) => {
-      let aVal = a[sortBy] || 0;
-      let bVal = b[sortBy] || 0;
-      if (sortDir === 'desc') return bVal - aVal;
-      return aVal - bVal;
+      const aVal = a[sortBy] || 0;
+      const bVal = b[sortBy] || 0;
+      return sortDir === 'desc' ? bVal - aVal : aVal - bVal;
     });
     
     return result;
@@ -138,9 +66,9 @@ export default function Markets() {
   // Stats
   const stats = useMemo(() => ({
     totalMarkets: markets.length,
-    gainers: markets.filter(m => m.change > 0).length,
-    losers: markets.filter(m => m.change < 0).length,
-    totalVolume: markets.reduce((sum, m) => sum + (m.volume || 0), 0),
+    gainers: markets.filter(m => (m.change24h || 0) > 0).length,
+    losers: markets.filter(m => (m.change24h || 0) < 0).length,
+    totalVolume: markets.reduce((sum, m) => sum + (m.volume24h || 0), 0),
   }), [markets]);
 
   return (
@@ -218,8 +146,8 @@ export default function Markets() {
                 cursor: 'pointer',
               }}
             >
-              <option value="volume">Sort by Volume</option>
-              <option value="change">Sort by Change</option>
+              <option value="volume24h">Sort by Volume</option>
+              <option value="change24h">Sort by Change</option>
               <option value="price">Sort by Price</option>
             </select>
           </div>
@@ -256,17 +184,17 @@ export default function Markets() {
                     <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 'bold', fontFamily: 'monospace' }}>
                       {formatPrice(market.price, market.type)}
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: market.change >= 0 ? '#00ff88' : '#ff0055', fontWeight: '600', fontFamily: 'monospace' }}>
-                      {market.change >= 0 ? '+' : ''}{market.change?.toFixed(2)}%
+                    <td style={{ ...tdStyle, textAlign: 'right', color: (market.change24h || 0) >= 0 ? '#00ff88' : '#ff0055', fontWeight: '600', fontFamily: 'monospace' }}>
+                      {(market.change24h || 0) >= 0 ? '+' : ''}{(market.change24h || 0).toFixed(2)}%
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#888', fontFamily: 'monospace' }}>
-                      {formatVolume(market.volume)}
+                      {formatVolume(market.volume24h)}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#00ff88', fontFamily: 'monospace' }}>
-                      {formatPrice(market.high, market.type)}
+                      {formatPrice(market.price * 1.02, market.type)}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#ff0055', fontFamily: 'monospace' }}>
-                      {formatPrice(market.low, market.type)}
+                      {formatPrice(market.price * 0.98, market.type)}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                       <Link href={`/trade?symbol=${market.symbol}`}>

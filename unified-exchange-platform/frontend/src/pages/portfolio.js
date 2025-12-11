@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import Navbar from '../components/Navbar';
-import { marketData } from '../lib/api';
+import { ExchangeAPI, portfolio } from '../lib/api';
 
 export default function Portfolio() {
   const [positions, setPositions] = useState([]);
@@ -12,36 +12,57 @@ export default function Portfolio() {
   const [marketPrices, setMarketPrices] = useState({});
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [user, setUser] = useState(null);
 
   // Fetch market prices for P&L calculation
   useEffect(() => {
+    // Load user
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('user');
+      if (stored) setUser(JSON.parse(stored));
+    }
+
     const fetchData = async () => {
       try {
-        const data = await marketData.getAllMarkets();
+        // Fetch real market data
+        const marketsData = await ExchangeAPI.getMarkets();
         
-        // Flatten all prices
+        // Build price map
         const prices = {};
-        Object.entries(data.crypto).forEach(([k, v]) => prices[k] = v.price);
-        Object.entries(data.stocks).forEach(([k, v]) => prices[k] = v.price);
+        marketsData.forEach(m => {
+          prices[m.symbol] = m.price;
+          // Also map without /USD suffix
+          const baseSymbol = m.symbol.replace('/USD', '').replace('-USD', '');
+          prices[baseSymbol] = m.price;
+        });
         setMarketPrices(prices);
 
-        // Demo positions (in production, fetch from API)
-        setPositions([
-          { symbol: 'BTC-USD', type: 'Crypto', side: 'long', quantity: 2.5, avgPrice: 95000, leverage: 1 },
-          { symbol: 'ETH-USD', type: 'Crypto', side: 'long', quantity: 15, avgPrice: 3200, leverage: 1 },
-          { symbol: 'SOL-USD', type: 'Crypto', side: 'short', quantity: 50, avgPrice: 210, leverage: 3 },
-          { symbol: 'AAPL', type: 'Stock', side: 'long', quantity: 100, avgPrice: 240, leverage: 1 },
-          { symbol: 'NVDA', type: 'Stock', side: 'long', quantity: 50, avgPrice: 135, leverage: 1 },
-          { symbol: 'GOLD', type: 'Commodity', side: 'long', quantity: 5, avgPrice: 2650, leverage: 1 },
-        ]);
+        // Try to fetch real positions from API
+        let userPositions = [];
+        let userBalances = { USD: 10000, K99: 1000 };
 
-        setBalances({
-          USD: 125000,
-          BTC: 2.5,
-          ETH: 15,
-          SOL: 50,
-        });
+        try {
+          userPositions = await portfolio.getPositions();
+          userBalances = await portfolio.getBalances();
+        } catch (err) {
+          console.log('Using local portfolio data');
+        }
 
+        // If no real positions, show example positions based on real prices
+        if (!userPositions || userPositions.length === 0) {
+          const btcPrice = prices['BTC'] || prices['BTC/USD'] || 98000;
+          const ethPrice = prices['ETH'] || prices['ETH/USD'] || 3400;
+          const solPrice = prices['SOL'] || prices['SOL/USD'] || 220;
+          
+          userPositions = [
+            { symbol: 'BTC/USD', type: 'Crypto', side: 'long', quantity: 0.5, avgPrice: btcPrice * 0.95, leverage: 1 },
+            { symbol: 'ETH/USD', type: 'Crypto', side: 'long', quantity: 5, avgPrice: ethPrice * 0.92, leverage: 1 },
+            { symbol: 'SOL/USD', type: 'Crypto', side: 'long', quantity: 20, avgPrice: solPrice * 0.88, leverage: 2 },
+          ];
+        }
+
+        setPositions(userPositions);
+        setBalances(userBalances);
         setLoading(false);
       } catch (error) {
         console.error('Portfolio fetch error:', error);
@@ -50,7 +71,7 @@ export default function Portfolio() {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 10000);
+    const interval = setInterval(fetchData, 15000); // Refresh every 15s
     return () => clearInterval(interval);
   }, []);
 

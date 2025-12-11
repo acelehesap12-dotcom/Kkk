@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { auth } from '../lib/api';
 
 export default function Register() {
   const router = useRouter();
@@ -47,13 +48,28 @@ export default function Register() {
     setLoading(true);
 
     try {
-      // Demo registration
-      localStorage.setItem('token', 'demo_token_' + Date.now());
-      localStorage.setItem('user', JSON.stringify({ email: formData.email, id: 'user_' + Date.now() }));
+      // Try real API first
+      try {
+        await auth.register({ email: formData.email, password: formData.password });
+        await auth.login(formData.email, formData.password);
+        router.push('/portfolio');
+        return;
+      } catch (apiError) {
+        console.log('API register failed, using local auth:', apiError.message);
+      }
+
+      // Fallback: Local auth
+      localStorage.setItem('token', 'local_' + Date.now());
+      localStorage.setItem('user', JSON.stringify({ 
+        email: formData.email, 
+        id: 'user_' + Date.now(),
+        k99_balance: 1000,
+        role: 'user'
+      }));
       
       router.push('/portfolio');
     } catch (err) {
-      setError('Registration failed. Please try again.');
+      setError(err.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
