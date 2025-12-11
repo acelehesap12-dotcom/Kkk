@@ -109,15 +109,13 @@ services:
     plan: free
     rootDir: unified-exchange-platform/settlement-service
     buildCommand: npm install && npm run build
-    startCommand: npm start
+    startCommand: node dist/chain-reorg-manager.js
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 3002
-      - key: DATABASE_URL
-        sync: false
 
 # ========================================
 # CRON JOBS - Zamanlanmış Görevler

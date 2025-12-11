@@ -9,18 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/gorilla/websocket"
 )
 
 // 👑 UNIFIED EXCHANGE - ORDER GATEWAY
 // Language: Go
 // Purpose: High-concurrency WebSocket Gateway for Order Entry
-// Protocol: JSON over WSS (FIX support planned)
+// Note: Kafka-free version for Render.com deployment
 
 var (
 	upgrader = websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true }, // Dev only
+		CheckOrigin: func(r *http.Request) bool { return true },
 	}
 	isTradingHalted bool
 	haltMutex       sync.RWMutex
@@ -28,94 +27,110 @@ var (
 	// Client Management
 	clients    = make(map[*websocket.Conn]bool)
 	clientsMux sync.Mutex
+
+	// In-memory order book
+	orderBook   = make([]OrderRequest, 0)
+	ordersMutex sync.RWMutex
 )
 
 type OrderRequest struct {
 	ID        string  `json:"id"`
 	UserID    string  `json:"user_id"`
 	Symbol    string  `json:"symbol"`
-	Side      string  `json:"side"` // "buy" or "sell"
+	Side      string  `json:"side"`
 	Price     float64 `json:"price"`
 	Quantity  float64 `json:"quantity"`
-	OrderType string  `json:"order_type"` // "limit", "market"
+	OrderType string  `json:"order_type"`
 	Timestamp int64   `json:"timestamp"`
+	Status    string  `json:"status"`
 }
 
 func main() {
 	log.Println("👑 ORDER GATEWAY STARTED")
 
-	// Kafka Producer Config
-	p, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": os.Getenv("KAFKA_BROKERS"),
-		"client.id":         "order-gateway",
-		"acks":              "all",
-		"security.protocol": os.Getenv("SECURITY_PROTOCOL"), // For Upstash
-		"sasl.mechanism":    os.Getenv("SASL_MECHANISM"),    // For Upstash
-		"sasl.username":     os.Getenv("KAFKA_USERNAME"),    // For Upstash
-		"sasl.password":     os.Getenv("KAFKA_PASSWORD"),    // For Upstash
-	})
-	if err != nil {
-		log.Printf("Failed to create producer: %s\n", err)
-	} else {
-		defer p.Close()
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	// Kafka Consumer (For Trades)
-	go consumeTrades()
+	// WebSocket
+	http.HandleFunc("/ws/orders", handleConnection)
 
-	http.HandleFunc("/ws/orders", func(w http.ResponseWriter, r *http.Request) {
-		handleConnection(w, r, p)
-	})
+	// REST Endpoints
+	http.HandleFunc("/health", handleHealth)
+	http.HandleFunc("/", handleRoot)
+	http.HandleFunc("/admin/panic", handlePanic)
+	http.HandleFunc("/orders", handleOrders)
 
-	// 🏥 HEALTH CHECK ENDPOINT
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":         "healthy",
-			"service":        "order-gateway",
-			"version":        "2.0.0",
-			"trading_halted": isTradingHalted,
-		})
-	})
-
-	// 🚨 PANIC SWITCH ENDPOINT
-	http.HandleFunc("/admin/panic", func(w http.ResponseWriter, r *http.Request) {
-		// CORS
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		if r.Method == "OPTIONS" {
-			return
-		}
-
-		if r.Method != "POST" {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		haltMutex.Lock()
-		isTradingHalted = !isTradingHalted
-		newState := isTradingHalted
-		haltMutex.Unlock()
-
-		log.Printf("🚨 PANIC SWITCH TOGGLED: Trading Halted = %v", newState)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]bool{"halted": newState})
-	})
-
-	log.Println(">>> Listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Printf(">>> Listening on :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-func handleConnection(w http.ResponseWriter, r *http.Request, p *kafka.Producer) {
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":         "healthy",
+		"service":        "order-gateway",
+		"version":        "2.1.0",
+		"trading_halted": isTradingHalted,
+		"clients":        len(clients),
+	})
+}
+
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"service":   "K99 Exchange - Order Gateway",
+		"version":   "2.1.0",
+		"endpoints": []string{"/health", "/ws/orders", "/orders", "/admin/panic"},
+	})
+}
+
+func handlePanic(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	haltMutex.Lock()
+	isTradingHalted = !isTradingHalted
+	newState := isTradingHalted
+	haltMutex.Unlock()
+
+	log.Printf("🚨 PANIC SWITCH: Trading Halted = %v", newState)
+	broadcastMessage([]byte(fmt.Sprintf(`{"type":"system","halted":%v}`, newState)))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"halted": newState})
+}
+
+func handleOrders(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	ordersMutex.RLock()
+	json.NewEncoder(w).Encode(orderBook)
+	ordersMutex.RUnlock()
+}
+
+func handleConnection(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade error:", err)
 		return
 	}
 
-	// Register Client
 	clientsMux.Lock()
 	clients[ws] = true
 	clientsMux.Unlock()
@@ -127,6 +142,13 @@ func handleConnection(w http.ResponseWriter, r *http.Request, p *kafka.Producer)
 		ws.Close()
 	}()
 
+	// Welcome message
+	ws.WriteJSON(map[string]interface{}{
+		"type":    "connected",
+		"message": "K99 Order Gateway",
+		"time":    time.Now().Unix(),
+	})
+
 	for {
 		_, message, err := ws.ReadMessage()
 		if err != nil {
@@ -134,79 +156,42 @@ func handleConnection(w http.ResponseWriter, r *http.Request, p *kafka.Producer)
 			break
 		}
 
-		// 0. Check Panic Switch
 		haltMutex.RLock()
 		halted := isTradingHalted
 		haltMutex.RUnlock()
 		if halted {
-			ws.WriteJSON(map[string]string{"error": "TRADING HALTED BY ADMIN"})
+			ws.WriteJSON(map[string]string{"error": "TRADING HALTED"})
 			continue
 		}
 
-		// 1. Parse Order
 		var order OrderRequest
 		if err := json.Unmarshal(message, &order); err != nil {
 			ws.WriteJSON(map[string]string{"error": "Invalid JSON"})
 			continue
 		}
 
-		// 2. Enrich & Validate (Mock Auth)
 		order.Timestamp = time.Now().UnixNano()
 		order.ID = fmt.Sprintf("%d", order.Timestamp)
+		order.Status = "open"
 
-		// 3. Push to Kafka (Order Ingestion Topic)
-		topic := "orders.ingest"
-		if p != nil {
-			value, _ := json.Marshal(order)
-			p.Produce(&kafka.Message{
-				TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-				Value:          value,
-			}, nil)
-			log.Printf(">>> Order Pushed to Kafka: %s %s @ %f (ID: %s)", order.Side, order.Symbol, order.Price, order.ID)
+		ordersMutex.Lock()
+		orderBook = append(orderBook, order)
+		if len(orderBook) > 1000 {
+			orderBook = orderBook[len(orderBook)-1000:]
 		}
+		ordersMutex.Unlock()
 
-		// 4. Ack to Client
+		log.Printf("📝 Order: %s %s %.4f @ %.2f", order.Side, order.Symbol, order.Quantity, order.Price)
 		ws.WriteJSON(map[string]string{"status": "received", "order_id": order.ID})
-	}
-}
-
-func consumeTrades() {
-	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": os.Getenv("KAFKA_BROKERS"),
-		"group.id":          "gateway-broadcaster",
-		"auto.offset.reset": "latest",
-		"security.protocol": os.Getenv("SECURITY_PROTOCOL"),
-		"sasl.mechanism":    os.Getenv("SASL_MECHANISM"),
-		"sasl.username":     os.Getenv("KAFKA_USERNAME"),
-		"sasl.password":     os.Getenv("KAFKA_PASSWORD"),
-	})
-
-	if err != nil {
-		log.Printf("Failed to create consumer: %s\n", err)
-		return
-	}
-
-	c.SubscribeTopics([]string{"trades.executed"}, nil)
-
-	for {
-		msg, err := c.ReadMessage(-1)
-		if err == nil {
-			log.Printf(">>> Broadcasting Trade: %s", string(msg.Value))
-			broadcastMessage(msg.Value)
-		} else {
-			log.Printf("Consumer error: %v\n", err)
-		}
+		broadcastMessage(message)
 	}
 }
 
 func broadcastMessage(message []byte) {
 	clientsMux.Lock()
 	defer clientsMux.Unlock()
-
 	for client := range clients {
-		err := client.WriteMessage(websocket.TextMessage, message)
-		if err != nil {
-			log.Printf("Websocket error: %s", err)
+		if err := client.WriteMessage(websocket.TextMessage, message); err != nil {
 			client.Close()
 			delete(clients, client)
 		}

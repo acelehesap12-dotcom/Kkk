@@ -1,24 +1,19 @@
 {
   "name": "settlement-service",
-  "version": "1.0.0",
-  "description": "Blockchain Settlement & Reorg Manager",
+  "version": "2.0.0",
+  "description": "K99 Exchange - Settlement & Treasury Service",
   "main": "dist/chain-reorg-manager.js",
   "scripts": {
     "start": "ts-node src/chain-reorg-manager.ts",
     "build": "tsc",
-    "test": "jest"
+    "start:prod": "node dist/chain-reorg-manager.js"
   },
   "dependencies": {
-    "ethers": "^6.7.0",
-    "web3": "^4.1.1",
-    "pg": "^8.11.3",
-    "kafkajs": "^2.2.4",
     "dotenv": "^16.3.1"
   },
   "devDependencies": {
     "typescript": "^5.2.2",
     "ts-node": "^10.9.1",
-    "@types/node": "^20.5.9",
-    "@types/pg": "^8.10.2"
+    "@types/node": "^20.5.9"
   }
 }

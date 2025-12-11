@@ -1,5 +1,4 @@
 # 👑 SETTLEMENT SERVICE DOCKERFILE
-# Stage 1: Builder
 FROM node:18-alpine AS builder
 
 WORKDIR /app
@@ -10,7 +9,7 @@ RUN npm install
 COPY src ./src
 RUN npm run build
 
-# Stage 2: Production Runtime
+# Production Runtime
 FROM node:18-alpine
 
 WORKDIR /app
@@ -19,6 +18,9 @@ COPY package.json ./
 RUN npm install --production
 
 COPY --from=builder /app/dist ./dist
+
+ENV PORT=3002
+EXPOSE 3002
 
 USER node
 
